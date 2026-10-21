@@ -194,27 +194,58 @@ export default function LecturePlayer({
 
     if (at.index === 0) {
       // Revert to primary audio track in native video element
-      videoRef.current.muted = false;
-      setIsMuted(false);
+      videoRef.current.muted = isMuted;
+      videoRef.current.volume = volume;
       if (altAudioRef.current) {
         altAudioRef.current.pause();
-        altAudioRef.current.src = '';
+        altAudioRef.current.removeAttribute('src');
+        altAudioRef.current.load();
       }
     } else {
       // Switch to secondary audio track via synchronized audio element
       videoRef.current.muted = true;
       if (altAudioRef.current) {
+        const audioEl = altAudioRef.current;
         const audioUrl = `/api/audio/track?key=${encodeURIComponent(lecture.id)}&streamIndex=${at.streamIndex}`;
-        altAudioRef.current.src = audioUrl;
-        altAudioRef.current.currentTime = curTime;
-        altAudioRef.current.volume = volume;
-        altAudioRef.current.playbackRate = playbackRate;
+
+        audioEl.pause();
+        audioEl.src = audioUrl;
+        audioEl.volume = volume;
+        audioEl.muted = isMuted;
+        audioEl.playbackRate = videoRef.current.playbackRate || playbackRate;
+
+        const syncAndPlay = () => {
+          try {
+            audioEl.currentTime = videoRef.current ? videoRef.current.currentTime : curTime;
+          } catch (e) {
+            console.warn('Could not set currentTime on alt audio:', e);
+          }
+          if (isCurrentlyPlaying) {
+            audioEl.play().catch((err) => {
+              console.warn('Alternate audio play failed:', err);
+            });
+          }
+        };
+
+        audioEl.onloadedmetadata = syncAndPlay;
+        audioEl.oncanplay = syncAndPlay;
+
+        audioEl.onerror = () => {
+          console.error('Alternate audio error, falling back to primary track');
+          if (videoRef.current) {
+            videoRef.current.muted = isMuted;
+          }
+          setSelectedAudioTrack(0);
+          showToast?.('Audio switch failed, reverting to primary');
+        };
+
+        audioEl.load();
         if (isCurrentlyPlaying) {
-          altAudioRef.current.play().catch(() => {});
+          audioEl.play().catch(() => {});
         }
       }
     }
-  }, [lecture.id, volume, playbackRate, showToast]);
+  }, [lecture.id, isMuted, volume, playbackRate, showToast]);
 
   // Subtitle Cycling Handler (Off -> Sub 1 -> Sub 2 -> ... -> Off)
   const cycleSubtitle = useCallback(() => {
@@ -810,12 +841,92 @@ export default function LecturePlayer({
       setShowSkipIntro(false);
     }
 
+    // Synchronize and drift check alternate audio track if active
+    if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && !videoRef.current.paused) {
+      const diff = Math.abs(altAudioRef.current.currentTime - cur);
+      if (diff > 0.3) {
+        try {
+          altAudioRef.current.currentTime = cur;
+        } catch {}
+      }
+      if (altAudioRef.current.paused) {
+        altAudioRef.current.play().catch(() => {});
+      }
+    }
+
     // Throttled periodic progress saving to server every 2 seconds
     const now = Date.now();
     if (now - lastSaveRef.current > 2000 && cur > 0) {
       lastSaveRef.current = now;
       api.updateProgress(lecture.id, { currentTime: cur, duration: dur }).catch(() => {});
       onUpdateLectureProgress?.(lecture.id, { currentTime: cur, duration: dur });
+    }
+  };
+
+  const handlePlay = () => {
+    setIsPlaying(true);
+    if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && videoRef.current) {
+      try {
+        altAudioRef.current.currentTime = videoRef.current.currentTime;
+      } catch {}
+      altAudioRef.current.play().catch(() => {});
+    }
+    if (brownNoiseActive && brownNoiseRef.current && brownNoiseRef.current.paused) {
+      brownNoiseRef.current.play().catch(() => {});
+    }
+  };
+
+  const handlePause = () => {
+    setIsPlaying(false);
+    if (altAudioRef.current && !altAudioRef.current.paused) {
+      altAudioRef.current.pause();
+    }
+    if (brownNoiseRef.current && !brownNoiseRef.current.paused) {
+      brownNoiseRef.current.pause();
+    }
+    if (videoRef.current && currentTime > 0) {
+      api.updateProgress(lecture.id, {
+        currentTime: currentTime,
+        duration: videoRef.current.duration || duration || 0
+      }).catch(() => {});
+      onUpdateLectureProgress?.(lecture.id, { currentTime });
+    }
+  };
+
+  const handleSeeked = () => {
+    if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && videoRef.current) {
+      try {
+        altAudioRef.current.currentTime = videoRef.current.currentTime;
+      } catch {}
+      if (!videoRef.current.paused && altAudioRef.current.paused) {
+        altAudioRef.current.play().catch(() => {});
+      }
+    }
+  };
+
+  const handleWaiting = () => {
+    if (altAudioRef.current && !altAudioRef.current.paused) {
+      altAudioRef.current.pause();
+    }
+  };
+
+  const handlePlaying = () => {
+    setIsPlaying(true);
+    if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && videoRef.current) {
+      if (Math.abs(altAudioRef.current.currentTime - videoRef.current.currentTime) > 0.25) {
+        try {
+          altAudioRef.current.currentTime = videoRef.current.currentTime;
+        } catch {}
+      }
+      if (altAudioRef.current.paused) {
+        altAudioRef.current.play().catch(() => {});
+      }
+    }
+  };
+
+  const handleRateChange = () => {
+    if (altAudioRef.current && videoRef.current) {
+      altAudioRef.current.playbackRate = videoRef.current.playbackRate;
     }
   };
 
@@ -871,19 +982,6 @@ export default function LecturePlayer({
     });
   };
 
-  const handlePause = () => {
-    setIsPlaying(false);
-    if (altAudioRef.current && !altAudioRef.current.paused) {
-      altAudioRef.current.pause();
-    }
-    if (videoRef.current && currentTime > 0) {
-      api.updateProgress(lecture.id, {
-        currentTime: currentTime,
-        duration: videoRef.current.duration || duration || 0
-      }).catch(() => {});
-      onUpdateLectureProgress?.(lecture.id, { currentTime });
-    }
-  };
 
   const handleVideoEnded = () => {
     setIsPlaying(false);
@@ -1118,8 +1216,12 @@ export default function LecturePlayer({
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={handleVideoEnded}
-          onPlay={() => setIsPlaying(true)}
+          onPlay={handlePlay}
           onPause={handlePause}
+          onSeeked={handleSeeked}
+          onWaiting={handleWaiting}
+          onPlaying={handlePlaying}
+          onRateChange={handleRateChange}
         >
           {selectedSubtitle && (
             <track
@@ -1492,8 +1594,8 @@ export default function LecturePlayer({
 
                 {/* 4. Audio & Subtitles */}
                 <button
-                  className={`netflix-bar-btn ${(activeDrawer === 'audioSub' || activeDrawer === 'subSettings') ? 'active' : ''}`}
-                  onClick={() => setActiveDrawer(prev => (prev === 'subSettings' || prev === 'audioSub') ? null : 'subSettings')}
+                  className={`netflix-bar-btn ${activeDrawer === 'audioSub' ? 'active' : ''}`}
+                  onClick={() => setActiveDrawer(prev => prev === 'audioSub' ? null : 'audioSub')}
                 >
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M20 2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l4 4 4-4h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-9 10H7v-2h4v2zm6 0h-4v-2h4v2zm0-4H7V6h10v2z"/>
@@ -1669,13 +1771,13 @@ export default function LecturePlayer({
           </div>
         )}
 
-        {/* 4. Subtitle & Audio Settings (Gear Box) Drawer */}
-        {(activeDrawer === 'audioSub' || activeDrawer === 'subSettings') && (
+        {/* 4. Audio & Subtitles Track Selection Drawer */}
+        {activeDrawer === 'audioSub' && (
           <div className="netflix-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="netflix-drawer-header">
               <div className="drawer-title">
-                <i className="fas fa-cog" style={{ color: '#E50914' }}></i>
-                <span>Subtitle & Audio Settings</span>
+                <i className="fas fa-closed-captioning" style={{ color: '#E50914' }}></i>
+                <span>Audio & Subtitles</span>
               </div>
               <button className="netflix-drawer-close" onClick={() => setActiveDrawer(null)}>
                 &times;
@@ -1683,50 +1785,8 @@ export default function LecturePlayer({
             </div>
 
             <div className="netflix-drawer-content" style={{ maxHeight: '68vh', overflowY: 'auto', paddingBottom: '20px' }}>
-              {/* Subtitle Font Size Presets */}
-              <div className="sub-settings-section">
-                <div className="sub-settings-label">
-                  <span>SUBTITLE FONT SIZE</span>
-                  <span style={{ color: '#E50914', fontSize: '0.8rem' }}>{subFontSize.toUpperCase()}</span>
-                </div>
-                <div className="sub-size-pills">
-                  {[
-                    { id: 'sm', label: 'Small (80%)' },
-                    { id: 'md', label: 'Normal (100%)' },
-                    { id: 'lg', label: 'Large (130%)' },
-                    { id: 'xl', label: 'Huge (160%)' }
-                  ].map((opt) => (
-                    <div
-                      key={opt.id}
-                      className={`sub-size-pill ${subFontSize === opt.id ? 'active' : ''}`}
-                      onClick={() => {
-                        setSubFontSize(opt.id);
-                        localStorage.setItem('courseflix_sub_fontsize', opt.id);
-                        showToast?.(`Subtitle Size: ${opt.label}`);
-                      }}
-                    >
-                      {opt.label}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Anime Subtitle Live Preview Box */}
-                <div className="sub-preview-card">
-                  <div
-                    className="sub-preview-text"
-                    style={{
-                      fontSize: subFontSize === 'sm' ? '1.05rem' :
-                                subFontSize === 'lg' ? '1.75rem' :
-                                subFontSize === 'xl' ? '2.25rem' : '1.35rem'
-                    }}
-                  >
-                    H-h-hey! Not this way!
-                  </div>
-                </div>
-              </div>
-
               {/* Subtitle & Audio Columns */}
-              <div className="netflix-audio-sub-columns" style={{ marginTop: '14px' }}>
+              <div className="netflix-audio-sub-columns">
                 {/* Audio Column */}
                 <div className="audio-sub-column">
                   <div className="column-title">AUDIO</div>
@@ -1820,8 +1880,92 @@ export default function LecturePlayer({
                         No subtitles available in this file or folder.
                       </div>
                     )}
+
+                    {/* Quick Link to Subtitle Styling & Font Size Gear */}
+                    <button
+                      className="sub-gear-jump-btn"
+                      onClick={() => setActiveDrawer('subSettings')}
+                    >
+                      <i className="fas fa-cog"></i>
+                      <span>Subtitle Font & Style Settings</span>
+                    </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5. Dedicated Subtitle Settings Gear Drawer */}
+        {activeDrawer === 'subSettings' && (
+          <div className="netflix-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="netflix-drawer-header">
+              <div className="drawer-title">
+                <i className="fas fa-cog" style={{ color: '#E50914' }}></i>
+                <span>Subtitle Settings & Font</span>
+              </div>
+              <button className="netflix-drawer-close" onClick={() => setActiveDrawer(null)}>
+                &times;
+              </button>
+            </div>
+
+            <div className="netflix-drawer-content" style={{ maxHeight: '68vh', overflowY: 'auto', paddingBottom: '20px' }}>
+              {/* Subtitle Font Size Presets */}
+              <div className="sub-settings-section">
+                <div className="sub-settings-label">
+                  <span>SUBTITLE FONT SIZE</span>
+                  <span style={{ color: '#E50914', fontSize: '0.8rem' }}>{subFontSize.toUpperCase()}</span>
+                </div>
+                <div className="sub-size-pills">
+                  {[
+                    { id: 'sm', label: 'Small (80%)' },
+                    { id: 'md', label: 'Normal (100%)' },
+                    { id: 'lg', label: 'Large (130%)' },
+                    { id: 'xl', label: 'Huge (160%)' }
+                  ].map((opt) => (
+                    <div
+                      key={opt.id}
+                      className={`sub-size-pill ${subFontSize === opt.id ? 'active' : ''}`}
+                      onClick={() => {
+                        setSubFontSize(opt.id);
+                        localStorage.setItem('courseflix_sub_fontsize', opt.id);
+                        showToast?.(`Subtitle Size: ${opt.label}`);
+                      }}
+                    >
+                      {opt.label}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Subtitle Style Info */}
+                <div style={{ marginTop: '12px', fontSize: '0.78rem', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <i className="fas fa-info-circle" style={{ color: '#E50914' }}></i>
+                  <span>Font: Comic Sans MS • Color: White • Outline: Black • Background: None</span>
+                </div>
+
+                {/* Anime Subtitle Live Preview Box */}
+                <div className="sub-preview-card">
+                  <div
+                    className="sub-preview-text"
+                    style={{
+                      fontSize: subFontSize === 'sm' ? '1.05rem' :
+                                subFontSize === 'lg' ? '1.75rem' :
+                                subFontSize === 'xl' ? '2.25rem' : '1.35rem'
+                    }}
+                  >
+                    H-h-hey! Not this way!
+                  </div>
+                </div>
+
+                {/* Shortcut button back to track selection */}
+                <button
+                  className="sub-gear-jump-btn"
+                  onClick={() => setActiveDrawer('audioSub')}
+                  style={{ marginTop: '16px' }}
+                >
+                  <i className="fas fa-closed-captioning"></i>
+                  <span>Switch Audio / Subtitle Tracks</span>
+                </button>
               </div>
             </div>
           </div>

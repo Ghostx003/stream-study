@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { fileURLToPath } from 'url';
 import { spawn, execFile } from 'child_process';
 
 const MIME_MAP = {
@@ -159,7 +160,9 @@ export function serveEmbeddedSubtitle(req, res, filePath, streamIndex) {
   });
 }
 
-const audioCacheDir = path.join(process.cwd(), 'server/data/cache/audio');
+const __streamer_filename = fileURLToPath(import.meta.url);
+const __streamer_dirname = path.dirname(__streamer_filename);
+const audioCacheDir = path.resolve(__streamer_dirname, '../data/cache/audio');
 if (!fs.existsSync(audioCacheDir)) {
   fs.mkdirSync(audioCacheDir, { recursive: true });
 }
@@ -200,7 +203,7 @@ export function serveAudioTrack(req, res, filePath, streamIndex) {
   const extractionPromise = new Promise((resolve, reject) => {
     execFile('ffprobe', [
       '-v', 'error',
-      '-select_streams', `0:${sIdx}`,
+      '-select_streams', `${sIdx}`,
       '-show_entries', 'stream=codec_name',
       '-of', 'default=noprint_wrappers=1:nokey=1',
       filePath
@@ -209,33 +212,41 @@ export function serveAudioTrack(req, res, filePath, streamIndex) {
       const canCopy = codec === 'aac' || codec === 'mp3';
 
       const tempFile = `${cachedFilePath}.tmp_${Date.now()}`;
-      const args = [
-        '-v', 'error',
-        '-i', filePath,
-        '-map', `0:${sIdx}`,
-        '-c:a', canCopy ? 'copy' : 'aac',
-        ...(canCopy ? [] : ['-b:a', '192k', '-ac', '2']),
-        '-vn',
-        '-f', 'mp4',
-        '-movflags', '+faststart',
-        tempFile,
-        '-y'
-      ];
+      const runFfmpeg = (tryCopy) => {
+        const args = [
+          '-v', 'error',
+          '-i', filePath,
+          '-map', `0:${sIdx}`,
+          '-c:a', tryCopy ? 'copy' : 'aac',
+          ...(tryCopy ? [] : ['-b:a', '192k', '-ac', '2']),
+          '-vn',
+          '-f', 'mp4',
+          '-movflags', '+faststart',
+          tempFile,
+          '-y'
+        ];
 
-      execFile('ffmpeg', args, { timeout: 120000 }, (ffErr) => {
-        if (ffErr) {
-          try { fs.unlinkSync(tempFile); } catch {}
-          return reject(ffErr);
-        }
+        execFile('ffmpeg', args, { timeout: 120000 }, (ffErr) => {
+          if (ffErr) {
+            if (tryCopy) {
+              // Fallback to transcoding if copy failed
+              return runFfmpeg(false);
+            }
+            try { fs.unlinkSync(tempFile); } catch {}
+            return reject(ffErr);
+          }
 
-        try {
-          fs.renameSync(tempFile, cachedFilePath);
-        } catch (renameErr) {
-          // If already renamed by concurrent call, ignore
-        }
+          try {
+            fs.renameSync(tempFile, cachedFilePath);
+          } catch (renameErr) {
+            // If already renamed by concurrent call, ignore
+          }
 
-        resolve();
-      });
+          resolve();
+        });
+      };
+
+      runFfmpeg(canCopy);
     });
   });
 
