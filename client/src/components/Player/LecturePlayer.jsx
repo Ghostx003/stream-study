@@ -3,7 +3,7 @@ import { formatTime, formatDuration, formatTimeRemaining } from '../../utils/for
 import { api } from '../../utils/api';
 import ShortcutsModal from './ShortcutsModal';
 
-const PRESET_SPEEDS = [1, 1.25, 1.5, 1.6, 1.75, 1.85, 2, 2.25, 2.5, 3];
+const PRESET_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5];
 
 export default function LecturePlayer({
   lecture,
@@ -34,16 +34,34 @@ export default function LecturePlayer({
   const [showRealTimeLeft, setShowRealTimeLeft] = useState(true);
   const [isHideControls, setIsHideControls] = useState(false);
 
+  // Screen Lock Feature
+  const [isLocked, setIsLocked] = useState(false);
+  const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
+  const unlockTimeoutRef = useRef(null);
+
+  // Gesture Controls (Brightness, Volume, Slide to Seek)
+  const [brightness, setBrightness] = useState(1.0);
+  const [showBrightnessSlider, setShowBrightnessSlider] = useState(false);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const [slideSeek, setSlideSeek] = useState({ active: false, delta: 0, targetTime: 0 });
+  const touchStartRef = useRef({ x: 0, y: 0, time: 0, isVertical: null, moved: false });
+  const sliderFadeTimerRef = useRef(null);
+
+  // Netflix Bottom Drawers ('moments' | 'speed' | 'episodes' | 'audioSub' | null)
+  const [activeDrawer, setActiveDrawer] = useState(null);
+
+  // Subtitles & Audio Tracks
+  const [availableSubtitles, setAvailableSubtitles] = useState(lecture.subtitles || []);
+  const [selectedSubtitle, setSelectedSubtitle] = useState(null);
+  const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
+  const [selectedAudioTrack, setSelectedAudioTrack] = useState(0);
+
   // Bookmarks & Overlays
   const [bookmarks, setBookmarks] = useState(lecture.bookmarks || []);
-  const [showBookmarksPopover, setShowBookmarksPopover] = useState(false);
-  const [showCustomSpeedPopover, setShowCustomSpeedPopover] = useState(false);
-  const [customSpeedInput, setCustomSpeedInput] = useState('1.75');
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showSkipIntro, setShowSkipIntro] = useState(false);
   const [leftSeekActive, setLeftSeekActive] = useState(false);
   const [rightSeekActive, setRightSeekActive] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Brown noise state
   const [brownNoiseActive, setBrownNoiseActive] = useState(false);
@@ -52,8 +70,6 @@ export default function LecturePlayer({
   // Bookmark cycling state
   const savedTimelinePosRef = useRef(null);
   const isCyclingRef = useRef(false);
-
-  // Double-tap tracking for touch devices
   const lastTapRef = useRef({ time: 0, x: 0 });
 
   // Stream URL
@@ -64,7 +80,6 @@ export default function LecturePlayer({
     api.getSettings().then(st => {
       if (st && st.defaultPlaybackSpeed) {
         setPlaybackRate(st.defaultPlaybackSpeed);
-        setCustomSpeedInput(String(st.defaultPlaybackSpeed));
       }
       if (st && st.brownNoiseVolume) {
         setBrownNoiseVolume(st.brownNoiseVolume);
@@ -72,16 +87,19 @@ export default function LecturePlayer({
     }).catch(() => {});
   }, []);
 
-  // Update bookmarks and progress when lecture changes
+  // Update lecture data when lecture changes
   useEffect(() => {
     let isMounted = true;
     setBookmarks(lecture.bookmarks || []);
+    setAvailableSubtitles(lecture.subtitles || []);
+    setSelectedSubtitle(null);
     const initialTime = lecture.currentTime || 0;
     setCurrentTime(initialTime);
     resumeTimeRef.current = initialTime;
     setDuration(lecture.duration || 0);
     savedTimelinePosRef.current = null;
     isCyclingRef.current = false;
+    setActiveDrawer(null);
 
     // Fetch authoritative saved progress & bookmarks from server
     api.getProgress(lecture.id).then((prog) => {
@@ -120,7 +138,6 @@ export default function LecturePlayer({
     return () => {
       isMounted = false;
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      // Automatically save position when switching to another lecture or exiting player
       if (videoRef.current && videoRef.current.currentTime > 0) {
         api.updateProgress(lecture.id, {
           currentTime: videoRef.current.currentTime,
@@ -132,18 +149,19 @@ export default function LecturePlayer({
 
   // Controls auto-hide on inactivity
   const resetControlsTimeout = useCallback(() => {
+    if (isLocked) return;
     setIsHideControls(false);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => {
-      if (videoRef.current && !videoRef.current.paused) {
+      if (videoRef.current && !videoRef.current.paused && !activeDrawer) {
         setIsHideControls(true);
       }
-    }, 3500);
-  }, []);
+    }, 4000);
+  }, [isLocked, activeDrawer]);
 
   // Play / Pause toggle
   const togglePlayPause = useCallback(() => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || isLocked) return;
     if (videoRef.current.paused) {
       videoRef.current.play().then(() => {
         setIsPlaying(true);
@@ -155,7 +173,7 @@ export default function LecturePlayer({
           videoRef.current.muted = true;
           setIsMuted(true);
           setShowUnmuteBtn(true);
-          videoRef.current.play();
+          videoRef.current.play().catch(() => {});
         }
       });
     } else {
@@ -165,38 +183,35 @@ export default function LecturePlayer({
         brownNoiseRef.current.pause();
       }
     }
-  }, [brownNoiseActive]);
+    resetControlsTimeout();
+  }, [isLocked, brownNoiseActive, resetControlsTimeout]);
 
   // Seek relative seconds with icon animation
   const seekRelative = useCallback((seconds) => {
-    if (!videoRef.current) return;
-    videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + seconds));
+    if (!videoRef.current || isLocked) return;
+    const dur = videoRef.current.duration || duration || 0;
+    const newTime = Math.max(0, Math.min(dur, videoRef.current.currentTime + seconds));
+    videoRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
     if (seconds > 0) {
       setRightSeekActive(true);
-      setTimeout(() => setRightSeekActive(false), 500);
+      setTimeout(() => setRightSeekActive(false), 550);
     } else {
       setLeftSeekActive(true);
-      setTimeout(() => setLeftSeekActive(false), 500);
+      setTimeout(() => setLeftSeekActive(false), 550);
     }
-  }, []);
+    resetControlsTimeout();
+  }, [isLocked, duration, resetControlsTimeout]);
 
   // Change playback speed
   const changeSpeed = useCallback((newSpeed) => {
     const clamped = Math.max(0.1, Math.min(5.0, Math.round(newSpeed * 100) / 100));
     setPlaybackRate(clamped);
-    setCustomSpeedInput(String(clamped));
     if (videoRef.current) {
       videoRef.current.playbackRate = clamped;
     }
     showToast?.(`Speed: ${clamped}x`);
   }, [showToast]);
-
-  // Cycle preset speeds
-  const cycleSpeed = useCallback(() => {
-    const idx = PRESET_SPEEDS.findIndex(s => Math.abs(s - playbackRate) < 0.05);
-    const nextIdx = idx >= 0 ? (idx + 1) % PRESET_SPEEDS.length : 0;
-    changeSpeed(PRESET_SPEEDS[nextIdx]);
-  }, [playbackRate, changeSpeed]);
 
   // Fullscreen
   const toggleFullscreen = useCallback(() => {
@@ -208,7 +223,7 @@ export default function LecturePlayer({
     }
   }, []);
 
-  // Bookmarks handling
+  // Bookmarks / Moments handling
   const handleAddBookmark = useCallback(async () => {
     if (!videoRef.current) return;
     const time = Math.round(videoRef.current.currentTime * 10) / 10;
@@ -217,9 +232,9 @@ export default function LecturePlayer({
       const updatedBookmarks = res.progress.bookmarks || [];
       setBookmarks(updatedBookmarks);
       onUpdateLectureProgress?.(lecture.id, { bookmarks: updatedBookmarks });
-      showToast?.(`Bookmark added at ${formatTime(time)}`);
+      showToast?.(`Saved Moment at ${formatTime(time)}`);
     } catch (e) {
-      showToast?.('Failed to save bookmark', true);
+      showToast?.('Failed to save moment', true);
     }
   }, [lecture.id, showToast, onUpdateLectureProgress]);
 
@@ -229,343 +244,195 @@ export default function LecturePlayer({
       const updatedBookmarks = res.progress.bookmarks || [];
       setBookmarks(updatedBookmarks);
       onUpdateLectureProgress?.(lecture.id, { bookmarks: updatedBookmarks });
-      showToast?.('Bookmark removed');
+      showToast?.('Moment removed');
     } catch (e) {
-      showToast?.('Failed to delete bookmark', true);
+      showToast?.('Failed to remove moment', true);
     }
   }, [lecture.id, showToast, onUpdateLectureProgress]);
 
-  const handleCycleBookmarks = useCallback(() => {
-    if (!videoRef.current || bookmarks.length === 0) {
-      showToast?.('No bookmarks saved for this lecture');
-      return;
-    }
+  // Playlist navigation
+  const currentIdx = playlist.findIndex(l => l.id === lecture.id);
+  const hasNextLecture = currentIdx >= 0 && currentIdx < playlist.length - 1;
+  const hasPrevLecture = currentIdx > 0;
 
-    const curr = videoRef.current.currentTime;
-    if (!isCyclingRef.current) {
-      savedTimelinePosRef.current = curr;
-      isCyclingRef.current = true;
-    }
-
-    let nextIdx = bookmarks.findIndex(b => b > curr + 1.2);
-    if (nextIdx === -1) nextIdx = 0;
-
-    const targetTime = bookmarks[nextIdx];
-    videoRef.current.currentTime = targetTime;
-    showToast?.(`Bookmark ${nextIdx + 1}/${bookmarks.length}: ${formatTime(targetTime)}`);
-  }, [bookmarks, showToast]);
-
-  const handleReturnToTimeline = useCallback(() => {
-    if (!videoRef.current) return;
-    if (savedTimelinePosRef.current !== null) {
-      videoRef.current.currentTime = savedTimelinePosRef.current;
-      showToast?.(`Returned to main timeline (${formatTime(savedTimelinePosRef.current)})`);
-      savedTimelinePosRef.current = null;
-      isCyclingRef.current = false;
-    } else {
-      showToast?.(`Already on main timeline`);
-    }
-  }, [showToast]);
-
-  // Brown noise toggle
-  const toggleBrownNoise = useCallback(() => {
-    if (!brownNoiseRef.current) return;
-    if (brownNoiseActive) {
-      brownNoiseRef.current.pause();
-      setBrownNoiseActive(false);
-      showToast?.('Brown Noise: OFF');
-    } else {
-      brownNoiseRef.current.volume = brownNoiseVolume;
-      brownNoiseRef.current.currentTime = 15;
-      brownNoiseRef.current.play().then(() => {
-        setBrownNoiseActive(true);
-        showToast?.('Brown Noise: ON');
-      }).catch(() => {});
-    }
-  }, [brownNoiseActive, brownNoiseVolume, showToast]);
-
-  // Save progress before switching
-  const handleSelectLecture = useCallback((nextLecture) => {
-    if (videoRef.current && videoRef.current.currentTime > 0) {
-      api.updateProgress(lecture.id, {
-        currentTime: videoRef.current.currentTime,
-        duration: videoRef.current.duration || duration || 0
-      }).catch(() => {});
-      onUpdateLectureProgress?.(lecture.id, {
-        currentTime: videoRef.current.currentTime
-      });
-    }
-    onSelectLecture(nextLecture);
-  }, [lecture.id, duration, onSelectLecture, onUpdateLectureProgress]);
-
-  // Next / Previous playlist lecture
   const playNextLecture = useCallback(() => {
-    const idx = playlist.findIndex(l => l.id === lecture.id);
-    if (idx >= 0 && idx < playlist.length - 1) {
-      handleSelectLecture(playlist[idx + 1]);
+    if (hasNextLecture) {
+      const nextLec = playlist[currentIdx + 1];
+      if (videoRef.current && videoRef.current.currentTime > 0) {
+        api.updateProgress(lecture.id, {
+          currentTime: videoRef.current.currentTime,
+          duration: videoRef.current.duration || 0
+        }).catch(() => {});
+      }
+      onSelectLecture(nextLec);
+      showToast?.(`Next: ${nextLec.name}`);
     } else {
-      showToast?.('No next lecture available in this folder');
+      showToast?.('Reached end of playlist');
     }
-  }, [playlist, lecture.id, handleSelectLecture, showToast]);
+  }, [hasNextLecture, playlist, currentIdx, lecture.id, onSelectLecture, showToast]);
 
   const playPrevLecture = useCallback(() => {
-    const idx = playlist.findIndex(l => l.id === lecture.id);
-    if (idx > 0) {
-      handleSelectLecture(playlist[idx - 1]);
-    } else {
-      showToast?.('No previous lecture available in this folder');
+    if (hasPrevLecture) {
+      const prevLec = playlist[currentIdx - 1];
+      if (videoRef.current && videoRef.current.currentTime > 0) {
+        api.updateProgress(lecture.id, {
+          currentTime: videoRef.current.currentTime,
+          duration: videoRef.current.duration || 0
+        }).catch(() => {});
+      }
+      onSelectLecture(prevLec);
+      showToast?.(`Previous: ${prevLec.name}`);
     }
-  }, [playlist, lecture.id, handleSelectLecture, showToast]);
+  }, [hasPrevLecture, playlist, currentIdx, lecture.id, onSelectLecture, showToast]);
 
   const handleBackToFolderWithSave = useCallback(() => {
     if (videoRef.current && videoRef.current.currentTime > 0) {
       api.updateProgress(lecture.id, {
         currentTime: videoRef.current.currentTime,
-        duration: videoRef.current.duration || duration || 0
+        duration: videoRef.current.duration || 0
       }).catch(() => {});
       onUpdateLectureProgress?.(lecture.id, {
         currentTime: videoRef.current.currentTime
       });
     }
     onBackToFolder();
-  }, [lecture.id, duration, onBackToFolder, onUpdateLectureProgress]);
+  }, [lecture.id, onBackToFolder, onUpdateLectureProgress]);
 
-  // Touch double-tap detection
-  const handleTouchEnd = useCallback((e) => {
-    const now = Date.now();
-    const touch = e.changedTouches[0];
-    if (!touch || !videoWrapperRef.current) return;
-
-    const rect = videoWrapperRef.current.getBoundingClientRect();
-    const x = touch.clientX - rect.left;
-    const timeDiff = now - lastTapRef.current.time;
-
-    if (timeDiff < 300 && timeDiff > 0) {
-      // Double-tap detected
-      e.preventDefault();
-      if (x < rect.width / 2) {
-        seekRelative(-10);
-      } else {
-        seekRelative(10);
-      }
-      lastTapRef.current = { time: 0, x: 0 };
-    } else {
-      lastTapRef.current = { time: now, x };
+  // ==========================================
+  // TOUCH GESTURES (Brightness, Volume, Slide Seek)
+  // ==========================================
+  const handleTouchStart = (e) => {
+    if (isLocked) {
+      setShowUnlockPrompt(true);
+      if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
+      unlockTimeoutRef.current = setTimeout(() => setShowUnlockPrompt(false), 3000);
+      return;
     }
-  }, [seekRelative]);
 
-  // Double-click on desktop
-  const handleDoubleClick = useCallback((e) => {
-    if (e.target.closest('.video-controls-container') || e.target.closest('.unmute-btn')) return;
-    if (!videoWrapperRef.current) return;
-    const rect = videoWrapperRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    if (clickX < rect.width / 2) {
-      seekRelative(-10);
-    } else {
-      seekRelative(10);
+    if (e.touches.length === 1 && videoWrapperRef.current) {
+      const t = e.touches[0];
+      const rect = videoWrapperRef.current.getBoundingClientRect();
+      const relX = t.clientX - rect.left;
+      const isLeftSide = relX < rect.width * 0.45;
+      const isRightSide = relX > rect.width * 0.55;
+
+      touchStartRef.current = {
+        x: t.clientX,
+        y: t.clientY,
+        time: Date.now(),
+        startVolume: videoRef.current ? videoRef.current.volume : volume,
+        startBrightness: brightness,
+        startTime: videoRef.current ? videoRef.current.currentTime : currentTime,
+        isLeftSide,
+        isRightSide,
+        isVertical: null,
+        moved: false
+      };
     }
-  }, [seekRelative]);
+  };
 
-  // Mouse wheel seek
-  const handleWheel = useCallback((e) => {
-    if (e.target.closest('.video-controls-container') || e.target.closest('.lecture-menu')) return;
-    e.preventDefault();
-    if (e.deltaY < 0) {
-      seekRelative(10);
-    } else {
-      seekRelative(-10);
+  const handleTouchMove = (e) => {
+    if (isLocked || e.touches.length !== 1 || !videoWrapperRef.current) return;
+    const t = e.touches[0];
+    const start = touchStartRef.current;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+
+    // Detect direction after passing 12px threshold
+    if (start.isVertical === null && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+      start.isVertical = Math.abs(dy) > Math.abs(dx);
     }
-  }, [seekRelative]);
 
-  // Global keyboard shortcuts listener
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Ignore when focused inside text inputs
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+    if (start.isVertical === true) {
+      // Vertical gesture: Brightness on left, Volume on right
+      start.moved = true;
+      const rect = videoWrapperRef.current.getBoundingClientRect();
+      const deltaRatio = -dy / (rect.height * 0.55);
 
-      const key = e.key;
-
-      if (key === 'Escape') {
-        if (showShortcutsModal) {
-          setShowShortcutsModal(false);
-          return;
+      if (start.isLeftSide) {
+        // Brightness control (0.25 to 1.5)
+        const newBright = Math.max(0.25, Math.min(1.5, start.startBrightness + deltaRatio));
+        setBrightness(newBright);
+        setShowBrightnessSlider(true);
+        setShowVolumeSlider(false);
+      } else if (start.isRightSide) {
+        // Volume control (0.0 to 1.0)
+        const newVol = Math.max(0, Math.min(1.0, start.startVolume + deltaRatio));
+        setVolume(newVol);
+        if (videoRef.current) {
+          videoRef.current.volume = newVol;
+          if (newVol > 0 && videoRef.current.muted) {
+            videoRef.current.muted = false;
+            setIsMuted(false);
+          }
         }
-        if (showBookmarksPopover) {
-          setShowBookmarksPopover(false);
-          return;
-        }
-        if (showCustomSpeedPopover) {
-          setShowCustomSpeedPopover(false);
-          return;
-        }
+        setShowVolumeSlider(true);
+        setShowBrightnessSlider(false);
       }
+    } else if (start.isVertical === false) {
+      // Horizontal gesture: Slide to skip 10 seconds / scrub!
+      start.moved = true;
+      const seekDeltaSeconds = Math.round((dx / 10) * 10) / 10;
+      const dur = duration || (videoRef.current ? videoRef.current.duration : 0) || 0;
+      const target = Math.max(0, Math.min(dur, start.startTime + seekDeltaSeconds));
+      setSlideSeek({
+        active: true,
+        delta: seekDeltaSeconds,
+        targetTime: target
+      });
+    }
+  };
 
-      if (key === '/') {
-        e.preventDefault();
-        setShowShortcutsModal(prev => !prev);
-        return;
+  const handleTouchEnd = () => {
+    if (isLocked) return;
+    const start = touchStartRef.current;
+
+    // Apply slide seek if active
+    if (slideSeek.active) {
+      if (videoRef.current && typeof slideSeek.targetTime === 'number') {
+        videoRef.current.currentTime = slideSeek.targetTime;
+        setCurrentTime(slideSeek.targetTime);
       }
+      setSlideSeek({ active: false, delta: 0, targetTime: 0 });
+    }
 
-      switch (key) {
-        case ' ':
-          e.preventDefault();
+    // Schedule fadeout for brightness & volume sliders
+    if (showBrightnessSlider || showVolumeSlider) {
+      if (sliderFadeTimerRef.current) clearTimeout(sliderFadeTimerRef.current);
+      sliderFadeTimerRef.current = setTimeout(() => {
+        setShowBrightnessSlider(false);
+        setShowVolumeSlider(false);
+      }, 1200);
+    }
+
+    // Double-tap seek or single-tap controls toggle
+    if (!start.moved && Date.now() - start.time < 350 && videoWrapperRef.current) {
+      const now = Date.now();
+      const lastTap = lastTapRef.current;
+      const rect = videoWrapperRef.current.getBoundingClientRect();
+      const tapX = start.x - rect.left;
+
+      if (now - lastTap.time < 350 && Math.abs(start.x - lastTap.x) < 50) {
+        // Double tap!
+        if (tapX < rect.width * 0.4) {
+          seekRelative(-10);
+        } else if (tapX > rect.width * 0.6) {
+          seekRelative(10);
+        } else {
           togglePlayPause();
-          break;
-
-        case 'ArrowLeft':
-          e.preventDefault();
-          if (e.ctrlKey) {
-            seekRelative(-30);
-            showToast?.('-30s Rewind');
-          } else {
-            seekRelative(-10);
+        }
+        lastTapRef.current = { time: 0, x: 0 };
+      } else {
+        lastTapRef.current = { time: now, x: start.x };
+        // Single tap toggle controls
+        setTimeout(() => {
+          if (Date.now() - lastTapRef.current.time >= 350 && lastTapRef.current.time !== 0) {
+            setIsHideControls(prev => !prev);
           }
-          break;
-
-        case 'ArrowRight':
-          e.preventDefault();
-          if (e.ctrlKey) {
-            seekRelative(30);
-            showToast?.('+30s Forward');
-          } else {
-            seekRelative(10);
-          }
-          break;
-
-        case 'ArrowUp':
-          e.preventDefault();
-          if (videoRef.current) {
-            const newVol = Math.min(1, Math.round((videoRef.current.volume + 0.02) * 100) / 100);
-            videoRef.current.volume = newVol;
-            setVolume(newVol);
-            showToast?.(`Volume: ${Math.round(newVol * 100)}%`);
-          }
-          break;
-
-        case 'ArrowDown':
-          e.preventDefault();
-          if (videoRef.current) {
-            const newVol = Math.max(0, Math.round((videoRef.current.volume - 0.02) * 100) / 100);
-            videoRef.current.volume = newVol;
-            setVolume(newVol);
-            showToast?.(`Volume: ${Math.round(newVol * 100)}%`);
-          }
-          break;
-
-        case 'c':
-        case 'C':
-          e.preventDefault();
-          changeSpeed(playbackRate + 0.1);
-          break;
-
-        case 'x':
-        case 'X':
-          e.preventDefault();
-          changeSpeed(playbackRate - 0.1);
-          break;
-
-        case '[':
-          e.preventDefault();
-          cycleSpeed();
-          break;
-
-        case ']':
-          e.preventDefault();
-          cycleSpeed();
-          break;
-
-        case 'z':
-        case 'Z':
-          e.preventDefault();
-          if (e.ctrlKey) {
-            handleCycleBookmarks();
-          } else {
-            handleAddBookmark();
-          }
-          break;
-
-        case 'p':
-        case 'P':
-          if (e.ctrlKey) {
-            e.preventDefault();
-            handleReturnToTimeline();
-          } else {
-            e.preventDefault();
-            playPrevLecture();
-          }
-          break;
-
-        case 't':
-        case 'T':
-          if (e.ctrlKey) {
-            e.preventDefault();
-            handleReturnToTimeline();
-          }
-          break;
-
-        case 'n':
-        case 'N':
-          e.preventDefault();
-          playNextLecture();
-          break;
-
-        case 'm':
-        case 'M':
-          e.preventDefault();
-          if (videoRef.current) {
-            const newMuted = !videoRef.current.muted;
-            videoRef.current.muted = newMuted;
-            setIsMuted(newMuted);
-            setShowUnmuteBtn(false);
-          }
-          break;
-
-        case 'b':
-        case 'B':
-          e.preventDefault();
-          toggleBrownNoise();
-          break;
-
-        case 'PageUp':
-          e.preventDefault();
-          if (brownNoiseRef.current) {
-            const newVol = Math.min(1, Math.round((brownNoiseVolume + 0.05) * 100) / 100);
-            setBrownNoiseVolume(newVol);
-            brownNoiseRef.current.volume = newVol;
-            showToast?.(`Brown Noise Vol: ${Math.round(newVol * 100)}%`);
-          }
-          break;
-
-        case 'PageDown':
-          e.preventDefault();
-          if (brownNoiseRef.current) {
-            const newVol = Math.max(0, Math.round((brownNoiseVolume - 0.05) * 100) / 100);
-            setBrownNoiseVolume(newVol);
-            brownNoiseRef.current.volume = newVol;
-            showToast?.(`Brown Noise Vol: ${Math.round(newVol * 100)}%`);
-          }
-          break;
-
-        case 'f':
-        case 'F':
-          e.preventDefault();
-          toggleFullscreen();
-          break;
-
-        default:
-          break;
+        }, 360);
       }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    togglePlayPause, seekRelative, changeSpeed, cycleSpeed, handleAddBookmark,
-    handleCycleBookmarks, handleReturnToTimeline, playNextLecture, playPrevLecture,
-    toggleBrownNoise, toggleFullscreen, playbackRate, brownNoiseVolume,
-    showShortcutsModal, showBookmarksPopover, showCustomSpeedPopover, showToast
-  ]);
+    }
+  };
 
   // Video element events
   const handleTimeUpdate = () => {
@@ -574,7 +441,6 @@ export default function LecturePlayer({
     const dur = videoRef.current.duration || duration || 0;
     setCurrentTime(cur);
 
-    // Skip intro button visibility
     if (cur <= 25 && dur > 25) {
       setShowSkipIntro(true);
     } else {
@@ -602,28 +468,41 @@ export default function LecturePlayer({
 
     videoRef.current.playbackRate = playbackRate;
 
-    // Resume from where left off (if > 1s and not at the very end of video)
+    // Detect browser native audio tracks if exposed
+    if (videoRef.current.audioTracks && videoRef.current.audioTracks.length > 0) {
+      const tracks = [];
+      for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
+        const at = videoRef.current.audioTracks[i];
+        tracks.push({
+          id: i,
+          label: at.label || `Audio Track ${i + 1} (${at.language || 'Default'})`,
+          language: at.language
+        });
+      }
+      setAvailableAudioTracks(tracks);
+    } else {
+      setAvailableAudioTracks([
+        { id: 0, label: 'Default / Stereo Audio', language: 'default' }
+      ]);
+    }
+
+    // Resume from where left off
     const targetTime = resumeTimeRef.current || lecture.currentTime || 0;
     if (targetTime > 1 && targetTime < (metaDur || 999999) - 3) {
       videoRef.current.currentTime = targetTime;
       setCurrentTime(targetTime);
     }
 
-    // Autoplay immediately upon clicking or opening lecture
-    const playPromise = videoRef.current.play();
-    if (playPromise !== undefined) {
-      playPromise.then(() => {
-        setIsPlaying(true);
-      }).catch((err) => {
-        if (err.name === 'NotAllowedError') {
-          // Browser audio policy prevented unmuted sound; mute to start playing immediately
-          videoRef.current.muted = true;
-          setIsMuted(true);
-          setShowUnmuteBtn(true);
-          videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-        }
-      });
-    }
+    videoRef.current.play().then(() => {
+      setIsPlaying(true);
+    }).catch((err) => {
+      if (err.name === 'NotAllowedError') {
+        videoRef.current.muted = true;
+        setIsMuted(true);
+        setShowUnmuteBtn(true);
+        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+      }
+    });
   };
 
   const handlePause = () => {
@@ -633,18 +512,14 @@ export default function LecturePlayer({
         currentTime: videoRef.current.currentTime,
         duration: videoRef.current.duration || duration || 0
       }).catch(() => {});
-      onUpdateLectureProgress?.(lecture.id, {
-        currentTime: videoRef.current.currentTime
-      });
+      onUpdateLectureProgress?.(lecture.id, { currentTime: videoRef.current.currentTime });
     }
   };
 
   const handleVideoEnded = () => {
     setIsPlaying(false);
     if (brownNoiseRef.current) brownNoiseRef.current.pause();
-    // Mark completed automatically when video reaches end
     onToggleLectureCompleted(lecture.id, true);
-    // Auto advance to next lecture if available
     playNextLecture();
   };
 
@@ -666,34 +541,32 @@ export default function LecturePlayer({
     onUpdateLectureProgress?.(lecture.id, { currentTime: val });
   };
 
-  // Calculate stats for playlist header
-  const completedLecturesCount = playlist.filter(l => l.completed).length;
-  const totalPlaylistLectures = playlist.length;
-  const totalPlaylistDuration = playlist.reduce((acc, l) => acc + (l.duration || 0), 0);
-  const remainingPlaylistDuration = playlist.reduce((acc, l) => acc + (l.completed ? 0 : (l.duration || 0)), 0);
-  const progressPercentage = totalPlaylistLectures > 0 
-    ? Math.round((completedLecturesCount / totalPlaylistLectures) * 100) 
-    : 0;
-
-  // Real-time vs Standard duration display calculations
+  // Calculate duration formats
   const effectiveDuration = duration || 1;
   const remainingRealTime = Math.max(0, (effectiveDuration - currentTime) / Math.max(0.1, playbackRate));
   const remainingStandardTime = Math.max(0, effectiveDuration - currentTime);
   const timelineProgressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
 
-  // Estimated end time calculation
-  const estimatedEndTime = () => {
-    if (!duration) return '';
-    const date = new Date(Date.now() + remainingRealTime * 1000);
-    let hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12;
-    return `Ends at ${hours}:${minutes} ${ampm}`;
+  // Brown noise
+  const toggleBrownNoise = () => {
+    if (!brownNoiseRef.current) return;
+    if (brownNoiseActive) {
+      brownNoiseRef.current.pause();
+      setBrownNoiseActive(false);
+      showToast?.('Brown Noise: OFF');
+    } else {
+      brownNoiseRef.current.volume = brownNoiseVolume;
+      brownNoiseRef.current.play().then(() => {
+        setBrownNoiseActive(true);
+        showToast?.('Brown Noise: ON');
+      }).catch(() => {
+        showToast?.('Could not start brown noise', true);
+      });
+    }
   };
 
   return (
-    <div className="player-view" ref={containerRef}>
+    <div className="netflix-player-root" ref={containerRef}>
       {/* Background Brown Noise Audio */}
       <audio
         ref={brownNoiseRef}
@@ -703,175 +576,253 @@ export default function LecturePlayer({
         style={{ display: 'none' }}
       />
 
-      {/* Collapsible Lecture Playlist Sidebar */}
-      <div className={`lecture-menu ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-        <div className="menu-header">
-          <div className="menu-header-top">
-            <button className="menu-back-link" onClick={handleBackToFolderWithSave}>
-              <i className="fas fa-arrow-left"></i> Back to Folder
-            </button>
-            <button
-              className="btn-icon"
-              onClick={() => setShowShortcutsModal(true)}
-              title="Keyboard Shortcuts (/)"
-              style={{ width: '28px', height: '28px', fontSize: '0.8rem' }}
-            >
-              <i className="fas fa-keyboard"></i>
-            </button>
-          </div>
-
-          <div className="menu-course-title">
-            {folderName || 'Lectures'}
-          </div>
-
-          <div className="menu-course-stats">
-            {formatDuration(totalPlaylistDuration)} total • {formatDuration(remainingPlaylistDuration)} remaining
-          </div>
-
-          <div className="menu-progress-container">
-            <div className="progress-bar-container">
-              <div
-                className="progress-bar-fill"
-                style={{ width: `${progressPercentage}%` }}
-              />
-            </div>
-            <div className="menu-progress-text">
-              <span>{completedLecturesCount}/{totalPlaylistLectures} completed</span>
-              <span>{progressPercentage}%</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Playlist Items */}
-        <div className="chapter-list">
-          {playlist.map((lec) => {
-            const isActive = lec.id === lecture.id;
-            return (
-              <div
-                key={lec.id}
-                className={`playlist-lecture-item ${isActive ? 'active' : ''}`}
-                onClick={() => handleSelectLecture(lec)}
-              >
-                <input
-                  type="checkbox"
-                  className="playlist-lecture-checkbox"
-                  checked={!!lec.completed}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    onToggleLectureCompleted(lec.id, !lec.completed);
-                  }}
-                  title={lec.completed ? 'Mark uncompleted' : 'Mark completed'}
-                />
-
-                <div className="playlist-lecture-info">
-                  <div className={`playlist-lecture-title ${lec.completed ? 'completed' : ''}`}>
-                    {lec.name}
-                  </div>
-                  <div className="playlist-lecture-meta">
-                    <span>{formatDuration(lec.duration)}</span>
-                    {lec.currentTime > 0 && !lec.completed && (
-                      <span>• {formatTime(lec.currentTime)} watched</span>
-                    )}
-                  </div>
-                </div>
-
-                {isActive && (
-                  <div className="playlist-playing-icon">
-                    <i className="fas fa-volume-up"></i>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Sidebar Toggle Tab Button */}
-      <button
-        className={`sidebar-toggle-btn ${isSidebarCollapsed ? 'collapsed' : ''}`}
-        onClick={() => setIsSidebarCollapsed(prev => !prev)}
-        title={isSidebarCollapsed ? 'Expand Playlist' : 'Collapse Playlist'}
+      {/* Main Video Wrapper */}
+      <div
+        className={`netflix-video-viewport ${isHideControls && !activeDrawer && !isLocked ? 'hide-controls' : ''}`}
+        ref={videoWrapperRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseMove={resetControlsTimeout}
+        onMouseEnter={resetControlsTimeout}
+        onClick={(e) => {
+          if (e.target.closest('.netflix-controls-layer') || e.target.closest('.netflix-drawer') || e.target.closest('.unmute-btn')) {
+            return;
+          }
+          if (isLocked) {
+            setShowUnlockPrompt(true);
+            if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
+            unlockTimeoutRef.current = setTimeout(() => setShowUnlockPrompt(false), 3000);
+            return;
+          }
+          if (activeDrawer) {
+            setActiveDrawer(null);
+            return;
+          }
+          setIsHideControls(prev => !prev);
+        }}
       >
-        <i className={`fas fa-chevron-${isSidebarCollapsed ? 'right' : 'left'}`}></i>
-      </button>
-
-      {/* Main Video View Area */}
-      <div className="player-content-wrapper">
-        <div className="video-wrapper-container">
-          <div
-            className={`video-wrapper ${isHideControls ? 'hide-controls' : ''}`}
-            ref={videoWrapperRef}
-            onClick={(e) => {
-              if (e.target.closest('.video-controls-container') || e.target.closest('.unmute-btn')) return;
-              togglePlayPause();
-            }}
-            onDoubleClick={handleDoubleClick}
-            onTouchEnd={handleTouchEnd}
-            onWheel={handleWheel}
-            onMouseMove={resetControlsTimeout}
-            onMouseEnter={resetControlsTimeout}
-          >
-            {/* Native Video Element */}
-            <video
-              ref={videoRef}
-              src={streamUrl}
-              className="video-player-element"
-              autoPlay
-              playsInline
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
-              onEnded={handleVideoEnded}
-              onPlay={() => setIsPlaying(true)}
-              onPause={handlePause}
+        {/* Video Element with CSS Brightness filter */}
+        <video
+          ref={videoRef}
+          src={streamUrl}
+          className="netflix-video-element"
+          autoPlay
+          playsInline
+          style={{ filter: `brightness(${brightness})` }}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onEnded={handleVideoEnded}
+          onPlay={() => setIsPlaying(true)}
+          onPause={handlePause}
+        >
+          {selectedSubtitle && (
+            <track
+              key={selectedSubtitle.id}
+              kind="subtitles"
+              src={selectedSubtitle.src}
+              srcLang={selectedSubtitle.srclang || 'en'}
+              label={selectedSubtitle.label}
+              default
             />
+          )}
+        </video>
 
-            {/* Unmute Overlay Button */}
-            {showUnmuteBtn && (
-              <button
-                className="unmute-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (videoRef.current) {
-                    videoRef.current.muted = false;
-                    setIsMuted(false);
-                    setShowUnmuteBtn(false);
-                  }
-                }}
-              >
-                <i className="fas fa-volume-mute"></i> Click to Unmute
-              </button>
-            )}
+        {/* Unmute Overlay Button */}
+        {showUnmuteBtn && (
+          <button
+            className="unmute-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (videoRef.current) {
+                videoRef.current.muted = false;
+                setIsMuted(false);
+                setShowUnmuteBtn(false);
+              }
+            }}
+          >
+            <i className="fas fa-volume-mute"></i> Click to Unmute
+          </button>
+        )}
 
-            {/* Seek Feedback Overlays (-10s / +10s) */}
-            <div className={`seek-overlay left ${leftSeekActive ? 'show-icon' : ''}`}>
-              <i className="fas fa-backward"></i>
+        {/* Double-Tap Seeking Wave Overlays */}
+        <div className={`seek-overlay left ${leftSeekActive ? 'show-icon' : ''}`}>
+          <svg viewBox="0 0 24 24" width="56" height="56" fill="currentColor">
+            <path d="M12.5 3a9 9 0 1 0 7.8 4.5l-1.5.8A7.2 7.2 0 1 1 12.5 4.8V7l4-3.5L12.5 0v3z"/>
+            <text x="12" y="16.5" fontSize="7.5" fontWeight="bold" textAnchor="middle" fill="currentColor">10</text>
+          </svg>
+        </div>
+        <div className={`seek-overlay right ${rightSeekActive ? 'show-icon' : ''}`}>
+          <svg viewBox="0 0 24 24" width="56" height="56" fill="currentColor">
+            <path d="M11.5 3a9 9 0 1 1-7.8 4.5l1.5.8A7.2 7.2 0 1 0 11.5 4.8V7l-4-3.5L11.5 0v3z"/>
+            <text x="12" y="16.5" fontSize="7.5" fontWeight="bold" textAnchor="middle" fill="currentColor">10</text>
+          </svg>
+        </div>
+
+        {/* Horizontal Slide to Skip HUD Overlay */}
+        {slideSeek.active && (
+          <div className="netflix-slide-hud">
+            <div className="slide-hud-icon">
+              {slideSeek.delta >= 0 ? <i className="fas fa-forward"></i> : <i className="fas fa-backward"></i>}
             </div>
-            <div className={`seek-overlay right ${rightSeekActive ? 'show-icon' : ''}`}>
-              <i className="fas fa-forward"></i>
+            <div className="slide-hud-delta">
+              {slideSeek.delta >= 0 ? `+${Math.round(slideSeek.delta)}s` : `${Math.round(slideSeek.delta)}s`}
+            </div>
+            <div className="slide-hud-time">
+              {formatTime(slideSeek.targetTime)} <span style={{ opacity: 0.6 }}>/ {formatTime(duration)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Vertical Brightness Slider Indicator (Left Side) */}
+        <div className={`netflix-vertical-slider brightness-slider ${showBrightnessSlider ? 'visible' : ''}`}>
+          <div className="slider-icon"><i className="fas fa-sun"></i></div>
+          <div className="slider-track">
+            <div className="slider-fill" style={{ height: `${Math.round(((brightness - 0.25) / 1.25) * 100)}%` }}></div>
+          </div>
+        </div>
+
+        {/* Vertical Volume Slider Indicator (Right Side) */}
+        <div className={`netflix-vertical-slider volume-slider ${showVolumeSlider ? 'visible' : ''}`}>
+          <div className="slider-icon"><i className={`fas fa-${volume === 0 || isMuted ? 'volume-mute' : 'volume-up'}`}></i></div>
+          <div className="slider-track">
+            <div className="slider-fill" style={{ height: `${Math.round((isMuted ? 0 : volume) * 100)}%` }}></div>
+          </div>
+        </div>
+
+        {/* Skip Intro Button */}
+        {showSkipIntro && (
+          <button
+            className="netflix-skip-intro-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              seekRelative(25);
+              setShowSkipIntro(false);
+              showToast?.('Skipped Intro');
+            }}
+          >
+            Skip Intro <i className="fas fa-forward"></i>
+          </button>
+        )}
+
+        {/* SCREEN LOCKED FLOATING UNLOCK PROMPT */}
+        {isLocked && (
+          <div className={`netflix-locked-overlay ${showUnlockPrompt ? 'active' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <button
+              className="netflix-unlock-pill-btn"
+              onClick={() => {
+                setIsLocked(false);
+                setShowUnlockPrompt(false);
+                showToast?.('Screen Unlocked');
+              }}
+            >
+              <i className="fas fa-lock"></i>
+              <span>Screen Locked</span>
+              <span className="unlock-subtext">Tap to unlock</span>
+            </button>
+          </div>
+        )}
+
+        {/* ==========================================
+            NETFLIX CONTROLS OVERLAY LAYER
+           ========================================== */}
+        {!isLocked && (
+          <div className="netflix-controls-layer" onClick={(e) => e.stopPropagation()}>
+            {/* Top Bar: Back, Title, Cast, Lock */}
+            <div className="netflix-top-bar">
+              <button
+                className="netflix-top-btn back-btn"
+                onClick={handleBackToFolderWithSave}
+                title="Back to lectures"
+              >
+                <i className="fas fa-arrow-left"></i>
+              </button>
+
+              <div className="netflix-title-info">
+                <span className="netflix-series-title">{folderName || 'Courseflix'}</span>
+                <span className="netflix-episode-title">
+                  {currentIdx >= 0 ? `S1:E${currentIdx + 1} "${lecture.name}"` : lecture.name}
+                </span>
+              </div>
+
+              <div className="netflix-top-actions">
+                {/* Brown Noise */}
+                <button
+                  className="netflix-top-btn"
+                  onClick={toggleBrownNoise}
+                  title={`Brown Noise (${brownNoiseActive ? 'ON' : 'OFF'})`}
+                  style={{ color: brownNoiseActive ? 'var(--accent-primary)' : 'inherit' }}
+                >
+                  <i className="fas fa-wave-square"></i>
+                </button>
+
+                {/* Cast / TV */}
+                <button
+                  className="netflix-top-btn"
+                  onClick={() => showToast?.('AirPlay / Cast')}
+                  title="Cast to TV"
+                >
+                  <i className="fas fa-tv"></i>
+                </button>
+
+                {/* Lock Screen Button */}
+                <button
+                  className="netflix-top-btn lock-btn"
+                  onClick={() => {
+                    setIsLocked(true);
+                    setIsHideControls(true);
+                    showToast?.('Screen Locked. Tap unlock icon to restore.');
+                  }}
+                  title="Lock Screen"
+                >
+                  <i className="fas fa-unlock"></i>
+                </button>
+              </div>
             </div>
 
-            {/* Skip Intro Button */}
-            {showSkipIntro && (
+            {/* Center Controls: 10s Rewind, Big Play/Pause, 10s Forward */}
+            <div className="netflix-center-controls">
+              {/* Rewind 10s */}
               <button
-                className="skip-intro-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  seekRelative(25);
-                  setShowSkipIntro(false);
-                  showToast?.('Skipped Intro');
-                }}
+                className="netflix-seek-circle-btn"
+                onClick={() => seekRelative(-10)}
+                title="Rewind 10s"
               >
-                Skip Intro <i className="fas fa-forward"></i>
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                  <path d="M12.5 3a9 9 0 1 0 7.8 4.5l-1.5.8A7.2 7.2 0 1 1 12.5 4.8V7l4-3.5L12.5 0v3z"/>
+                  <text x="12" y="16.5" fontSize="7.5" fontWeight="bold" textAnchor="middle" fill="currentColor">10</text>
+                </svg>
               </button>
-            )}
 
-            {/* Bottom Controls Bar */}
-            <div className="video-controls-container">
-              {/* Timeline with Bookmarks */}
-              <div className="timeline-container">
+              {/* Big Play / Pause */}
+              <button
+                className="netflix-main-play-btn"
+                onClick={togglePlayPause}
+                title={isPlaying ? 'Pause' : 'Play'}
+              >
+                <i className={`fas fa-${isPlaying ? 'pause' : 'play'}`}></i>
+              </button>
+
+              {/* Forward 10s */}
+              <button
+                className="netflix-seek-circle-btn"
+                onClick={() => seekRelative(10)}
+                title="Forward 10s"
+              >
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+                  <path d="M11.5 3a9 9 0 1 1-7.8 4.5l1.5.8A7.2 7.2 0 1 0 11.5 4.8V7l-4-3.5L11.5 0v3z"/>
+                  <text x="12" y="16.5" fontSize="7.5" fontWeight="bold" textAnchor="middle" fill="currentColor">10</text>
+                </svg>
+              </button>
+            </div>
+
+            {/* Bottom Controls Container */}
+            <div className="netflix-bottom-controls">
+              {/* Timeline Container with Netflix Red Bar */}
+              <div className="netflix-timeline-wrapper">
                 <input
                   type="range"
-                  className="timeline"
+                  className="netflix-timeline-slider"
                   min="0"
                   max={duration || 100}
                   step="0.1"
@@ -879,278 +830,329 @@ export default function LecturePlayer({
                   onInput={handleTimelineInput}
                   onChange={handleTimelineChange}
                   style={{
-                    background: `linear-gradient(to right, var(--accent-primary) ${timelineProgressPercent}%, rgba(255, 255, 255, 0.25) ${timelineProgressPercent}%)`
+                    background: `linear-gradient(to right, #E50914 ${timelineProgressPercent}%, rgba(255, 255, 255, 0.25) ${timelineProgressPercent}%)`
                   }}
                 />
 
-                {/* Bookmark Flag Dots on Timeline */}
-                <div id="bookmarks-container">
-                  {bookmarks.map((bTime) => (
-                    <BookmarkDot
-                      key={bTime}
-                      bTime={bTime}
-                      duration={duration}
-                      onSeek={(time) => {
-                        if (videoRef.current) {
-                          videoRef.current.currentTime = time;
-                          showToast?.(`Jumped to bookmark: ${formatTime(time)}`);
-                        }
-                      }}
-                      onRemove={handleRemoveBookmark}
-                      formatTime={formatTime}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Controls Row */}
-              <div className="controls-row">
-                <div className="left-controls">
-                  {/* Previous Lecture */}
-                  <button
-                    className="control-btn"
-                    onClick={(e) => { e.stopPropagation(); playPrevLecture(); }}
-                    title="Previous Lecture (P)"
-                  >
-                    <i className="fas fa-step-backward"></i>
-                  </button>
-
-                  {/* Play / Pause */}
-                  <button
-                    className="control-btn"
-                    onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
-                    title="Play / Pause (Space)"
-                  >
-                    <i className={`fas fa-${isPlaying ? 'pause' : 'play'}`}></i>
-                  </button>
-
-                  {/* Next Lecture */}
-                  <button
-                    className="control-btn"
-                    onClick={(e) => { e.stopPropagation(); playNextLecture(); }}
-                    title="Next Lecture (N)"
-                  >
-                    <i className="fas fa-step-forward"></i>
-                  </button>
-
-                  {/* Time & Duration Toggle */}
-                  <div className="time-display">
-                    <span>{formatTime(currentTime)}</span>
-                    <span style={{ margin: '0 6px', color: 'var(--text-muted)' }}>/</span>
-                    <span
-                      className="clickable-duration"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowRealTimeLeft(prev => !prev);
-                      }}
-                      title="Click to toggle time format"
-                    >
-                      {showRealTimeLeft
-                        ? formatTimeRemaining(remainingRealTime)
-                        : formatTimeRemaining(remainingStandardTime)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Center Estimated End Time */}
-                {duration > 0 && (
-                  <div className="estimated-end-time">
-                    {estimatedEndTime()}
-                  </div>
-                )}
-
-                <div className="right-controls">
-                  {/* Bookmarks Popover Panel */}
-                  {showBookmarksPopover && (
-                    <div
-                      className="bookmarks-popover"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="bookmarks-popover-header">
-                        <div className="bookmarks-popover-title">
-                          <i className="fas fa-bookmark"></i> Lecture Bookmarks
-                        </div>
-                        <button
-                          className="btn-icon"
-                          onClick={() => setShowBookmarksPopover(false)}
-                          style={{ width: '24px', height: '24px', fontSize: '0.75rem' }}
-                        >
-                          &times;
-                        </button>
-                      </div>
-
-                      <div className="bookmarks-popover-list">
-                        {bookmarks.length === 0 ? (
-                          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '12px 0' }}>
-                            No bookmarks saved yet. Press <kbd style={kbdSm}>Z</kbd> to add!
-                          </div>
-                        ) : (
-                          bookmarks.map((time) => (
-                            <div key={time} className="bookmark-popover-item">
-                              <span
-                                className="bookmark-jump-link"
-                                onClick={() => {
-                                  if (videoRef.current) {
-                                    videoRef.current.currentTime = time;
-                                    showToast?.(`Jumped to bookmark: ${formatTime(time)}`);
-                                  }
-                                }}
-                              >
-                                <i className="fas fa-play" style={{ fontSize: '0.65rem' }}></i> {formatTime(time)}
-                              </span>
-                              <button
-                                className="bookmark-delete-btn"
-                                onClick={() => handleRemoveBookmark(time)}
-                                title="Remove bookmark"
-                              >
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-
-                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                          Press <kbd style={kbdSm}>Z</kbd> to add
-                        </span>
-                        {bookmarks.length > 0 && (
-                          <button
-                            onClick={async () => {
-                              await api.clearBookmarks(lecture.id);
-                              setBookmarks([]);
-                              showToast?.('Cleared all bookmarks');
-                            }}
-                            style={{ background: 'none', border: 'none', color: 'var(--accent-danger)', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
-                          >
-                            Clear All
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Custom Speed Popover Panel */}
-                  {showCustomSpeedPopover && (
-                    <div
-                      className="custom-speed-popover"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="number"
-                        className="custom-speed-input"
-                        step="0.1"
-                        min="0.1"
-                        max="5.0"
-                        value={customSpeedInput}
-                        onChange={(e) => setCustomSpeedInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const val = parseFloat(customSpeedInput);
-                            if (val && val >= 0.1 && val <= 5.0) {
-                              changeSpeed(val);
-                            }
-                            setShowCustomSpeedPopover(false);
+                {/* Bookmark dots on timeline */}
+                <div className="netflix-timeline-bookmarks">
+                  {bookmarks.map((bTime) => {
+                    const bPercent = duration > 0 ? (bTime / duration) * 100 : 0;
+                    return (
+                      <div
+                        key={bTime}
+                        className="netflix-timeline-bookmark-dot"
+                        style={{ left: `${bPercent}%` }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (videoRef.current) {
+                            videoRef.current.currentTime = bTime;
+                            showToast?.(`Moment: ${formatTime(bTime)}`);
                           }
                         }}
                       />
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>x</span>
-                      <button
-                        className="btn btn-primary"
-                        style={{ padding: '4px 10px', fontSize: '0.82rem' }}
+                    );
+                  })}
+                </div>
+
+                {/* Remaining Time Display */}
+                <div
+                  className="netflix-time-remaining"
+                  onClick={() => setShowRealTimeLeft(prev => !prev)}
+                  title="Click to toggle time format"
+                >
+                  {showRealTimeLeft
+                    ? `-${formatTimeRemaining(remainingRealTime)}`
+                    : `-${formatTimeRemaining(remainingStandardTime)}`}
+                </div>
+              </div>
+
+              {/* Bottom 5 Action Buttons (Matching exact Netflix mobile UI) */}
+              <div className="netflix-action-bar">
+                {/* 1. Moments (Highlighted in user reference) */}
+                <button
+                  className={`netflix-bar-btn ${activeDrawer === 'moments' ? 'active' : ''}`}
+                  onClick={() => setActiveDrawer(prev => prev === 'moments' ? null : 'moments')}
+                >
+                  <i className="fas fa-bookmark"></i>
+                  <span>Moments</span>
+                </button>
+
+                {/* 2. Speed */}
+                <button
+                  className={`netflix-bar-btn ${activeDrawer === 'speed' ? 'active' : ''}`}
+                  onClick={() => setActiveDrawer(prev => prev === 'speed' ? null : 'speed')}
+                >
+                  <i className="fas fa-tachometer-alt"></i>
+                  <span>Speed ({playbackRate}x)</span>
+                </button>
+
+                {/* 3. Episodes */}
+                <button
+                  className={`netflix-bar-btn ${activeDrawer === 'episodes' ? 'active' : ''}`}
+                  onClick={() => setActiveDrawer(prev => prev === 'episodes' ? null : 'episodes')}
+                >
+                  <i className="fas fa-layer-group"></i>
+                  <span>Episodes</span>
+                </button>
+
+                {/* 4. Audio & Subtitles */}
+                <button
+                  className={`netflix-bar-btn ${activeDrawer === 'audioSub' ? 'active' : ''}`}
+                  onClick={() => setActiveDrawer(prev => prev === 'audioSub' ? null : 'audioSub')}
+                >
+                  <i className="fas fa-comment-dots"></i>
+                  <span>Audio & Subtitles</span>
+                </button>
+
+                {/* 5. Next Ep. */}
+                <button
+                  className="netflix-bar-btn"
+                  onClick={playNextLecture}
+                  disabled={!hasNextLecture}
+                  style={{ opacity: hasNextLecture ? 1 : 0.4 }}
+                >
+                  <i className="fas fa-step-forward"></i>
+                  <span>Next Ep.</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            NETFLIX BOTTOM SHEETS / DRAWERS
+           ========================================== */}
+
+        {/* 1. Moments Drawer */}
+        {activeDrawer === 'moments' && (
+          <div className="netflix-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="netflix-drawer-header">
+              <div className="drawer-title">
+                <i className="fas fa-bookmark" style={{ color: '#E50914' }}></i>
+                <span>Saved Moments</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="netflix-drawer-btn-sm" onClick={handleAddBookmark}>
+                  <i className="fas fa-plus"></i> Add Current Time
+                </button>
+                <button className="netflix-drawer-close" onClick={() => setActiveDrawer(null)}>
+                  &times;
+                </button>
+              </div>
+            </div>
+
+            <div className="netflix-drawer-content">
+              {bookmarks.length === 0 ? (
+                <div className="netflix-empty-drawer">
+                  <p>No saved moments yet for this lecture.</p>
+                  <button className="btn btn-primary" style={{ marginTop: '8px' }} onClick={handleAddBookmark}>
+                    <i className="fas fa-plus"></i> Save Moment at {formatTime(currentTime)}
+                  </button>
+                </div>
+              ) : (
+                <div className="netflix-moments-grid">
+                  {bookmarks.map((time) => (
+                    <div key={time} className="netflix-moment-chip">
+                      <div
+                        className="moment-click-target"
                         onClick={() => {
-                          const val = parseFloat(customSpeedInput);
-                          if (val && val >= 0.1 && val <= 5.0) {
-                            changeSpeed(val);
+                          if (videoRef.current) {
+                            videoRef.current.currentTime = time;
+                            showToast?.(`Jumped to ${formatTime(time)}`);
                           }
-                          setShowCustomSpeedPopover(false);
+                          setActiveDrawer(null);
                         }}
                       >
-                        Set
+                        <i className="fas fa-play-circle" style={{ color: '#E50914' }}></i>
+                        <span className="moment-timestamp">{formatTime(time)}</span>
+                      </div>
+                      <button
+                        className="moment-del-btn"
+                        onClick={() => handleRemoveBookmark(time)}
+                        title="Delete moment"
+                      >
+                        <i className="fas fa-trash"></i>
                       </button>
                     </div>
-                  )}
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
-                  {/* Bookmarks Popover Toggle Button */}
-                  <button
-                    className="control-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowBookmarksPopover(prev => !prev);
-                      setShowCustomSpeedPopover(false);
-                    }}
-                    title="View Bookmarks / Press Z to add"
-                  >
-                    <i className="fas fa-bookmark"></i>
-                  </button>
+        {/* 2. Speed Drawer */}
+        {activeDrawer === 'speed' && (
+          <div className="netflix-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="netflix-drawer-header">
+              <div className="drawer-title">
+                <i className="fas fa-tachometer-alt" style={{ color: '#E50914' }}></i>
+                <span>Playback Speed</span>
+              </div>
+              <button className="netflix-drawer-close" onClick={() => setActiveDrawer(null)}>
+                &times;
+              </button>
+            </div>
 
-                  {/* Brown Noise Toggle Button */}
-                  <button
-                    className="control-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleBrownNoise();
-                    }}
-                    title={`Brown Noise Background (B) - ${brownNoiseActive ? 'ON' : 'OFF'}`}
-                    style={{ color: brownNoiseActive ? 'var(--accent-primary)' : 'inherit' }}
-                  >
-                    <i className="fas fa-wave-square"></i>
-                  </button>
+            <div className="netflix-drawer-content">
+              <div className="netflix-speed-list">
+                {PRESET_SPEEDS.map((s) => {
+                  const isSelected = Math.abs(s - playbackRate) < 0.05;
+                  return (
+                    <div
+                      key={s}
+                      className={`netflix-speed-row ${isSelected ? 'selected' : ''}`}
+                      onClick={() => {
+                        changeSpeed(s);
+                        setActiveDrawer(null);
+                      }}
+                    >
+                      <span>{s}x {s === 1 ? '(Normal)' : ''}</span>
+                      {isSelected && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
-                  {/* Keyboard Shortcuts Dialog Button */}
-                  <button
-                    className="control-btn keyboard-shortcuts-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowShortcutsModal(true);
-                    }}
-                    title="Keyboard Shortcuts (/)"
-                  >
-                    <i className="fas fa-keyboard"></i>
-                  </button>
+        {/* 3. Episodes Drawer */}
+        {activeDrawer === 'episodes' && (
+          <div className="netflix-drawer episodes-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="netflix-drawer-header">
+              <div className="drawer-title">
+                <i className="fas fa-layer-group" style={{ color: '#E50914' }}></i>
+                <span>Episodes & Lectures ({playlist.length})</span>
+              </div>
+              <button className="netflix-drawer-close" onClick={() => setActiveDrawer(null)}>
+                &times;
+              </button>
+            </div>
 
-                  {/* Speed Cycling Button */}
-                  <button
-                    className="control-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      cycleSpeed();
+            <div className="netflix-drawer-content scrollable">
+              {playlist.map((lec, idx) => {
+                const isActive = lec.id === lecture.id;
+                return (
+                  <div
+                    key={lec.id}
+                    className={`netflix-episode-row ${isActive ? 'active' : ''}`}
+                    onClick={() => {
+                      if (!isActive) {
+                        onSelectLecture(lec);
+                        setActiveDrawer(null);
+                      }
                     }}
-                    title="Change Speed (C/X)"
-                    style={{ fontWeight: '700', fontSize: '0.88rem', minWidth: '42px' }}
                   >
-                    {playbackRate}x
-                  </button>
+                    <div className="episode-index">{idx + 1}</div>
+                    <div className="episode-info">
+                      <div className="episode-title">{lec.name}</div>
+                      <div className="episode-meta">
+                        <span>{formatDuration(lec.duration)}</span>
+                        {lec.completed && (
+                          <span style={{ color: 'var(--accent-primary)', marginLeft: '8px' }}>
+                            <i className="fas fa-check-circle"></i> Completed
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isActive ? (
+                      <div className="episode-playing-tag">Playing</div>
+                    ) : (
+                      <button className="episode-play-icon">
+                        <i className="fas fa-play"></i>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-                  {/* Custom Speed Slider Popover Button */}
-                  <button
-                    className="control-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowCustomSpeedPopover(prev => !prev);
-                      setShowBookmarksPopover(false);
-                    }}
-                    title="Custom Speed"
-                  >
-                    <i className="fas fa-sliders-h" style={{ fontSize: '0.9rem' }}></i>
-                  </button>
+        {/* 4. Audio & Subtitles Drawer */}
+        {activeDrawer === 'audioSub' && (
+          <div className="netflix-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="netflix-drawer-header">
+              <div className="drawer-title">
+                <i className="fas fa-comment-dots" style={{ color: '#E50914' }}></i>
+                <span>Audio & Subtitles</span>
+              </div>
+              <button className="netflix-drawer-close" onClick={() => setActiveDrawer(null)}>
+                &times;
+              </button>
+            </div>
 
-                  {/* Fullscreen Button */}
-                  <button
-                    className="control-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFullscreen();
-                    }}
-                    title="Fullscreen (F)"
-                  >
-                    <i className="fas fa-expand"></i>
-                  </button>
+            <div className="netflix-drawer-content">
+              <div className="netflix-audio-sub-columns">
+                {/* Audio Column */}
+                <div className="audio-sub-column">
+                  <div className="column-title">AUDIO</div>
+                  <div className="column-options">
+                    {availableAudioTracks.map((at) => (
+                      <div
+                        key={at.id}
+                        className={`column-option-row ${selectedAudioTrack === at.id ? 'selected' : ''}`}
+                        onClick={() => {
+                          setSelectedAudioTrack(at.id);
+                          if (videoRef.current && videoRef.current.audioTracks) {
+                            for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
+                              videoRef.current.audioTracks[i].enabled = (i === at.id);
+                            }
+                          }
+                          showToast?.(`Audio: ${at.label}`);
+                        }}
+                      >
+                        <span>{at.label}</span>
+                        {selectedAudioTrack === at.id && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Subtitles Column */}
+                <div className="audio-sub-column">
+                  <div className="column-title">SUBTITLES</div>
+                  <div className="column-options">
+                    {/* Off */}
+                    <div
+                      className={`column-option-row ${selectedSubtitle === null ? 'selected' : ''}`}
+                      onClick={() => {
+                        setSelectedSubtitle(null);
+                        showToast?.('Subtitles: OFF');
+                      }}
+                    >
+                      <span>Off</span>
+                      {selectedSubtitle === null && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
+                    </div>
+
+                    {/* Detected Subtitle files from folder */}
+                    {availableSubtitles.map((sub) => (
+                      <div
+                        key={sub.id}
+                        className={`column-option-row ${selectedSubtitle?.id === sub.id ? 'selected' : ''}`}
+                        onClick={() => {
+                          setSelectedSubtitle(sub);
+                          showToast?.(`Subtitles: ${sub.label}`);
+                        }}
+                      >
+                        <span>{sub.label}</span>
+                        {selectedSubtitle?.id === sub.id && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
+                      </div>
+                    ))}
+
+                    {availableSubtitles.length === 0 && (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: '8px 0' }}>
+                        No external subtitle files (.srt/.vtt) found in this folder.
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Keyboard Shortcuts Modal */}
@@ -1161,67 +1163,3 @@ export default function LecturePlayer({
     </div>
   );
 }
-
-function BookmarkDot({ bTime, duration, onSeek, onRemove, formatTime }) {
-  const [isDeletable, setIsDeletable] = useState(false);
-  const hoverTimerRef = useRef(null);
-
-  const handleMouseEnter = () => {
-    hoverTimerRef.current = setTimeout(() => {
-      setIsDeletable(true);
-    }, 2000);
-  };
-
-  const handleMouseLeave = () => {
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
-    setIsDeletable(false);
-  };
-
-  const handleClick = (e) => {
-    e.stopPropagation();
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
-    if (isDeletable) {
-      setIsDeletable(false);
-      onRemove(bTime);
-    } else {
-      onSeek(bTime);
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      if (hoverTimerRef.current) {
-        clearTimeout(hoverTimerRef.current);
-      }
-    };
-  }, []);
-
-  const bPercent = duration > 0 ? (bTime / duration) * 100 : 0;
-
-  return (
-    <div
-      className={`bookmark-dot ${isDeletable ? 'deletable' : ''}`}
-      style={{ left: `${bPercent}%` }}
-      title={isDeletable ? 'Click to delete bookmark' : `Bookmark at ${formatTime(bTime)} (Hover 2s to delete)`}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
-    >
-      <i className={`fas fa-${isDeletable ? 'trash' : 'flag'}`}></i>
-    </div>
-  );
-}
-
-const kbdSm = {
-  background: 'var(--bg-tertiary)',
-  padding: '1px 5px',
-  borderRadius: '4px',
-  border: '1px solid var(--border-secondary)',
-  fontSize: '0.72rem'
-};

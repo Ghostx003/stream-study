@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from './utils/api';
 import Navbar from './components/Navbar';
+import MobileNavBar from './components/MobileNavBar';
 import Breadcrumbs from './components/Breadcrumbs';
 import CourseGrid from './components/CourseGrid';
 import LectureList from './components/LectureList';
@@ -42,6 +43,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState(null);
+  const [mobileTab, setMobileTab] = useState('home');
 
   const activeRootRef = useRef(null);
   activeRootRef.current = activeRoot;
@@ -272,18 +274,20 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Navbar */}
-      <Navbar
-        networkInfo={networkInfo}
-        activeRoot={activeRoot}
-        onOpenSettings={() => setShowSettings(true)}
-        onGoHome={() => {
-          window.location.hash = '#/';
-        }}
-        showToast={showToast}
-      />
+      {/* Top Navbar (Hidden while in immersive Netflix player) */}
+      {!activeLecture && (
+        <Navbar
+          networkInfo={networkInfo}
+          activeRoot={activeRoot}
+          onOpenSettings={() => setShowSettings(true)}
+          onGoHome={() => {
+            window.location.hash = '#/';
+          }}
+          showToast={showToast}
+        />
+      )}
 
-      {/* When playing a lecture, render the Courseflix Player View */}
+      {/* When playing a lecture, render the Netflix Player View */}
       {activeLecture ? (
         <LecturePlayer
           lecture={activeLecture}
@@ -432,6 +436,18 @@ export default function App() {
         }}
         showToast={showToast}
       />
+
+      {/* Mobile Bottom Navigation (Visible on phone when player is not full screen) */}
+      {!activeLecture && (
+        <MobileNavBar
+          activeTab={mobileTab}
+          onTabChange={setMobileTab}
+          networkInfo={networkInfo}
+          onOpenSettings={() => setShowSettings(true)}
+          onGoHome={() => handleSelectFolder('')}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 }

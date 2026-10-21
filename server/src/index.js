@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { getLanAddresses, checkCandidatePorts, getTailscaleIp } from './network.js';
 import { configManager } from './configManager.js';
 import { scanFolder, resolveSecurePath, generateLectureKey } from './scanner.js';
-import { streamVideoFile } from './streamer.js';
+import { streamVideoFile, serveSubtitleFile } from './streamer.js';
 import { metadataService } from './metadata.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -177,6 +177,28 @@ app.all('/api/stream', (req, res) => {
     streamVideoFile(req, res, secureFilePath);
   } catch (err) {
     res.status(403).json({ error: err.message });
+  }
+});
+
+// Subtitle delivery endpoint with on-the-fly WebVTT conversion
+app.get('/api/subtitles', (req, res) => {
+  const { key, file } = req.query;
+  if (!key || !file) return res.status(400).send('Missing key or file');
+
+  const parts = key.split('::');
+  if (parts.length < 2) return res.status(400).send('Invalid lecture key');
+
+  const root = configManager.getRoots().find(r => r.id === parts[0]);
+  if (!root) return res.status(404).send('Media root not found');
+
+  const videoRelDir = path.dirname(parts.slice(1).join('::'));
+  const subRelPath = videoRelDir && videoRelDir !== '.' ? `${videoRelDir}/${file}` : file;
+
+  try {
+    const secureSubPath = resolveSecurePath(root.path, subRelPath);
+    serveSubtitleFile(req, res, secureSubPath);
+  } catch (err) {
+    res.status(403).send('Forbidden: Access denied');
   }
 });
 

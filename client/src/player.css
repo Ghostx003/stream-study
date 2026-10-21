@@ -1,693 +1,816 @@
-/* Courseflix Player Styles */
+/* ==========================================================================
+   NETFLIX MOBILE & DESKTOP VIDEO PLAYER STYLES (2026 High-Fidelity)
+   ========================================================================== */
 
-.player-view {
-  display: flex;
-  height: calc(100vh - 65px);
-  width: 100%;
-  overflow: hidden;
+.netflix-player-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
   background-color: #000;
-  position: relative;
-}
-
-/* Collapsible Lecture Playlist Sidebar */
-.lecture-menu {
-  width: 380px;
-  min-width: 320px;
-  max-width: 450px;
-  background-color: var(--bg-secondary);
-  border-right: 1px solid var(--border-primary);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  z-index: 50;
-  transition: transform 0.3s ease, margin-left 0.3s ease;
-  flex-shrink: 0;
-}
-.lecture-menu.collapsed {
-  margin-left: -380px;
-}
-
-.menu-header {
-  padding: 1.25rem 1.25rem 1rem;
-  border-bottom: 1px solid var(--border-primary);
-  background-color: var(--bg-card);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.menu-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.menu-back-link {
-  color: var(--accent-primary);
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  padding: 0;
-}
-.menu-back-link:hover {
-  text-decoration: underline;
-}
-.menu-course-title {
-  font-family: var(--font-heading);
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.3;
-}
-.menu-course-stats {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-.menu-progress-container {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.menu-progress-text {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  display: flex;
-  justify-content: space-between;
-}
-
-/* Playlist Lectures List */
-.chapter-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.75rem 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.playlist-lecture-item {
-  display: flex;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  gap: 10px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  border: 1px solid transparent;
-}
-.playlist-lecture-item:hover {
-  background-color: var(--bg-hover);
-}
-.playlist-lecture-item.active {
-  background-color: rgba(16, 185, 129, 0.15);
-  border-color: var(--border-accent);
-}
-.playlist-lecture-checkbox {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  accent-color: var(--accent-primary);
-}
-.playlist-lecture-info {
-  flex: 1;
-  min-width: 0;
-}
-.playlist-lecture-title {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
+  z-index: 99999;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
-.playlist-lecture-title.completed {
-  color: var(--text-muted);
-  text-decoration: line-through;
-}
-.playlist-lecture-meta {
-  font-size: 0.74rem;
-  color: var(--text-secondary);
-  display: flex;
-  gap: 8px;
-  margin-top: 2px;
-}
-.playlist-playing-icon {
-  color: var(--accent-primary);
-  font-size: 0.8rem;
-  animation: pulseIcon 1.5s infinite;
-}
-@keyframes pulseIcon {
-  0% { transform: scale(1); opacity: 0.8; }
-  50% { transform: scale(1.2); opacity: 1; }
-  100% { transform: scale(1); opacity: 0.8; }
-}
-
-/* Sidebar Toggle Button */
-.sidebar-toggle-btn {
-  position: absolute;
-  left: 380px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 48px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-left: none;
-  border-radius: 0 8px 8px 0;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 60;
-  transition: left 0.3s ease, background-color 0.2s;
-}
-.sidebar-toggle-btn:hover {
-  color: var(--accent-primary);
-  background: var(--bg-hover);
-}
-.sidebar-toggle-btn.collapsed {
-  left: 0;
-}
-
-/* Video Stage Area */
-.player-content-wrapper {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  position: relative;
-  background-color: #000;
-  height: 100%;
-  overflow: hidden;
-}
-.video-wrapper-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-.video-wrapper {
-  flex: 1;
-  background-color: #000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-  overflow: hidden;
   user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
-.video-player-element {
+
+.netflix-video-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #000;
+}
+
+.netflix-video-element {
   width: 100%;
   height: 100%;
   object-fit: contain;
   background-color: #000;
 }
 
-/* Controls Container */
-.video-controls-container {
+/* Subtitle styling */
+::cue {
+  background-color: rgba(0, 0, 0, 0.78);
+  color: #ffffff;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  border-radius: 4px;
+  line-height: 1.4;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* ==========================================================================
+   CONTROLS LAYER (Netflix Top & Bottom Gradients)
+   ========================================================================== */
+
+.netflix-controls-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: max(16px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.88) 0%,
+    rgba(0, 0, 0, 0.25) 20%,
+    rgba(0, 0, 0, 0) 40%,
+    rgba(0, 0, 0, 0) 60%,
+    rgba(0, 0, 0, 0.4) 80%,
+    rgba(0, 0, 0, 0.95) 100%
+  );
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+  opacity: 1;
+  z-index: 100;
+}
+
+.netflix-video-viewport.hide-controls .netflix-controls-layer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Re-enable pointer events for controls elements */
+.netflix-top-bar,
+.netflix-center-controls,
+.netflix-bottom-controls,
+.netflix-skip-intro-btn,
+.unmute-btn {
+  pointer-events: auto;
+}
+
+/* ==========================================================================
+   TOP BAR: Back, Title, Cast, Lock
+   ========================================================================== */
+
+.netflix-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.netflix-top-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 1.25rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.netflix-top-btn:active {
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: scale(0.92);
+}
+
+.netflix-title-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 60%;
+  gap: 2px;
+}
+.netflix-series-title {
+  font-size: 0.78rem;
+  color: #a3a3a3;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.netflix-episode-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.netflix-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ==========================================================================
+   CENTER CONTROLS (Rewind 10s, Big Play, Forward 10s)
+   ========================================================================== */
+
+.netflix-center-controls {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 52px;
+}
+
+.netflix-seek-circle-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.netflix-seek-circle-btn:active {
+  transform: scale(0.85);
+  opacity: 0.8;
+}
+
+.netflix-main-play-btn {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  color: #ffffff;
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+.netflix-main-play-btn:active {
+  transform: scale(0.9);
+  background-color: rgba(229, 9, 20, 0.4);
+}
+.netflix-main-play-btn i.fa-play {
+  margin-left: 4px;
+}
+
+/* ==========================================================================
+   VERTICAL GESTURE SLIDERS (Brightness on Left, Volume on Right)
+   ========================================================================== */
+
+.netflix-vertical-slider {
+  position: absolute;
+  top: 24%;
+  bottom: 24%;
+  width: 6px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.netflix-vertical-slider.visible {
+  opacity: 1;
+}
+
+.netflix-vertical-slider.brightness-slider {
+  left: max(32px, env(safe-area-inset-left));
+}
+.netflix-vertical-slider.volume-slider {
+  right: max(32px, env(safe-area-inset-right));
+}
+
+.netflix-vertical-slider .slider-icon {
+  position: absolute;
+  top: -34px;
+  color: #ffffff;
+  font-size: 1.15rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
+}
+
+.netflix-vertical-slider .slider-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.netflix-vertical-slider .slider-fill {
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
-  padding: 0 16px 12px;
-  z-index: 20;
-  opacity: 1;
-  transition: opacity 0.25s ease-in-out;
-  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
+  background: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+  transition: height 0.05s linear;
+}
+
+/* ==========================================================================
+   HORIZONTAL SLIDE-TO-SKIP HUD
+   ========================================================================== */
+
+.netflix-slide-hud {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(18, 18, 18, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 14px;
+  padding: 16px 28px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-.video-wrapper.hide-controls .video-controls-container {
-  opacity: 0 !important;
+  align-items: center;
+  gap: 4px;
+  z-index: 160;
   pointer-events: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  animation: hudPop 0.18s ease-out;
 }
-.video-wrapper.hide-controls {
-  cursor: none;
+.slide-hud-icon {
+  font-size: 1.5rem;
+  color: #E50914;
 }
-
-/* Timeline & Scrub Bar */
-.timeline-container {
-  height: 28px;
-  position: relative;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
+.slide-hud-delta {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #ffffff;
 }
-.timeline {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 3px;
-  outline: none;
-  cursor: pointer;
-  transition: height 0.15s ease;
-  position: relative;
-  z-index: 10;
+.slide-hud-time {
+  font-size: 0.92rem;
+  color: #d4d4d4;
+  font-family: monospace;
 }
-.timeline-container:hover .timeline {
-  height: 10px;
-}
-.timeline::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background-color: #fff;
-  cursor: pointer;
-  box-shadow: 0 0 6px rgba(0,0,0,0.5);
-  transition: transform 0.15s;
-}
-.timeline-container:hover .timeline::-webkit-slider-thumb {
-  transform: scale(1.25);
-  background-color: var(--accent-primary);
-}
-.timeline::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background-color: #fff;
-  cursor: pointer;
-  box-shadow: 0 0 6px rgba(0,0,0,0.5);
+@keyframes hudPop {
+  0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 
-/* Bookmarks on Timeline */
-#bookmarks-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 15;
-}
-.bookmark-dot {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 16px;
-  height: 16px;
-  color: var(--accent-amber);
-  cursor: pointer;
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  transition: transform 0.2s, color 0.2s;
-}
-.bookmark-dot:hover {
-  transform: translate(-50%, -50%) scale(1.4);
-}
-.bookmark-dot.deletable {
-  color: var(--accent-danger) !important;
-  animation: pulseDelete 0.5s infinite alternate ease-in-out;
-}
-@keyframes pulseDelete {
-  from { transform: translate(-50%, -50%) scale(1.35); }
-  to { transform: translate(-50%, -50%) scale(1.65); }
-}
+/* ==========================================================================
+   DOUBLE-TAP SEEK ANIMATION OVERLAYS
+   ========================================================================== */
 
-/* Controls Row */
-.controls-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: relative;
-}
-.left-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.right-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  position: relative;
-}
-.control-btn {
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.05rem;
-  cursor: pointer;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  transition: all 0.2s;
-  outline: none;
-}
-.control-btn:hover {
-  background-color: rgba(255, 255, 255, 0.15);
-  color: var(--accent-primary);
-}
-.time-display {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #fff;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-}
-.time-display span.clickable-duration {
-  cursor: pointer;
-  color: #e2e8f0;
-}
-.time-display span.clickable-duration:hover {
-  color: var(--accent-primary);
-}
-
-/* Center Estimated End Time */
-.estimated-end-time {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #e8f5e9;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
-  pointer-events: none;
-  opacity: 0.85;
-}
-
-/* Double-tap Seek Overlays */
 .seek-overlay {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 90px;
-  height: 90px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.65);
-  color: #fff;
+  top: 0;
+  bottom: 0;
+  width: 40%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  z-index: 30;
+  transition: opacity 0.2s ease;
+  z-index: 120;
 }
 .seek-overlay.left {
-  left: 10%;
+  left: 0;
+  background: radial-gradient(ellipse at left, rgba(255, 255, 255, 0.18) 0%, rgba(0, 0, 0, 0) 70%);
 }
 .seek-overlay.right {
-  right: 10%;
+  right: 0;
+  background: radial-gradient(ellipse at right, rgba(255, 255, 255, 0.18) 0%, rgba(0, 0, 0, 0) 70%);
 }
 .seek-overlay.show-icon {
   opacity: 1;
-  transform: translateY(-50%) scale(1.1);
+}
+.seek-overlay svg {
+  color: #ffffff;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.8));
+  animation: pulseSeek 0.45s ease-out infinite alternate;
+}
+@keyframes pulseSeek {
+  0% { transform: scale(0.9); }
+  100% { transform: scale(1.15); }
 }
 
-/* Skip Intro Button */
-.skip-intro-btn {
+/* ==========================================================================
+   SKIP INTRO BUTTON
+   ========================================================================== */
+
+.netflix-skip-intro-btn {
   position: absolute;
-  right: 24px;
-  bottom: 80px;
-  background: rgba(18, 24, 36, 0.9);
-  color: #fff;
-  border: 1px solid var(--border-accent);
-  padding: 10px 18px;
-  border-radius: var(--radius-md);
-  font-weight: 700;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: 125px;
+  background: rgba(22, 22, 22, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  padding: 8px 18px;
+  border-radius: 4px;
   font-size: 0.9rem;
-  cursor: pointer;
-  z-index: 35;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  font-weight: 700;
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 110;
+  transition: background-color 0.15s ease, transform 0.15s ease;
 }
-.skip-intro-btn:hover {
-  background: var(--accent-primary);
-  color: #fff;
+.netflix-skip-intro-btn:hover {
+  background: #ffffff;
+  color: #000000;
 }
 
-/* Unmute Button */
-.unmute-btn {
+/* ==========================================================================
+   BOTTOM CONTROLS: Timeline & Netflix 5 Action Buttons
+   ========================================================================== */
+
+.netflix-bottom-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Timeline */
+.netflix-timeline-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.netflix-timeline-slider {
+  flex: 1;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  transition: height 0.15s ease;
+}
+.netflix-timeline-slider:hover,
+.netflix-timeline-slider:active {
+  height: 6px;
+}
+
+.netflix-timeline-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #E50914;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(229, 9, 20, 0.9);
+  transition: transform 0.12s ease;
+}
+.netflix-timeline-slider:hover::-webkit-slider-thumb,
+.netflix-timeline-slider:active::-webkit-slider-thumb {
+  transform: scale(1.35);
+}
+
+.netflix-timeline-bookmarks {
   position: absolute;
-  top: 24px;
-  left: 24px;
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
-  border: 1px solid var(--border-secondary);
-  padding: 8px 16px;
-  border-radius: var(--radius-md);
-  font-size: 0.85rem;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 56px;
+  pointer-events: none;
+}
+.netflix-timeline-bookmark-dot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 4px #fff;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.netflix-time-remaining {
+  color: #d1d5db;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  min-width: 48px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 5 Action Buttons Row */
+.netflix-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  padding-top: 4px;
+}
+
+.netflix-bar-btn {
+  background: none;
+  border: none;
+  color: #d1d5db;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
-  z-index: 35;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: color 0.15s ease, transform 0.1s ease;
 }
-.unmute-btn:hover {
-  border-color: var(--accent-primary);
+.netflix-bar-btn i {
+  font-size: 1.15rem;
+}
+.netflix-bar-btn:active {
+  transform: scale(0.92);
+}
+.netflix-bar-btn.active,
+.netflix-bar-btn:hover {
+  color: #ffffff;
+}
+.netflix-bar-btn.active i {
+  color: #E50914;
 }
 
-/* Bookmarks Popover */
-.bookmarks-popover {
+/* ==========================================================================
+   SCREEN LOCK OVERLAY
+   ========================================================================== */
+
+.netflix-locked-overlay {
   position: absolute;
-  bottom: 100%;
-  right: 0;
-  margin-bottom: 12px;
-  padding: 14px;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  z-index: 100;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-secondary);
-  min-width: 280px;
-  max-width: 340px;
-  color: var(--text-primary);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 250;
+  pointer-events: none;
 }
-.bookmarks-popover-header {
+.netflix-unlock-pill-btn {
+  background: rgba(18, 18, 18, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ffffff;
+  padding: 12px 28px;
+  border-radius: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+.netflix-unlock-pill-btn:active {
+  transform: scale(0.94);
+  background-color: rgba(229, 9, 20, 0.3);
+}
+.netflix-unlock-pill-btn i {
+  font-size: 1.3rem;
+  color: #E50914;
+  margin-bottom: 2px;
+}
+.netflix-unlock-pill-btn span {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.netflix-unlock-pill-btn .unlock-subtext {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   NETFLIX BOTTOM SHEETS / DRAWERS
+   ========================================================================== */
+
+.netflix-drawer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(18, 18, 18, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px 18px 0 0;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  z-index: 220;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
+  animation: drawerSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+@keyframes drawerSlideUp {
+  0% { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+
+.netflix-drawer-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border-primary);
-  margin-bottom: 10px;
 }
-.bookmarks-popover-title {
-  font-size: 0.95rem;
+.drawer-title {
+  font-size: 1.05rem;
   font-weight: 700;
-  color: var(--accent-primary);
+  color: #ffffff;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
-.bookmarks-popover-list {
-  max-height: 220px;
+.netflix-drawer-close {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 1.5rem;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.netflix-drawer-btn-sm {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.netflix-drawer-content {
+  padding: 16px 20px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Speed List */
+.netflix-speed-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.bookmark-popover-item {
+.netflix-speed-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-sm);
-  font-size: 0.84rem;
-  border: 1px solid var(--border-primary);
-}
-.bookmark-jump-link {
-  color: var(--accent-primary);
+  padding: 12px 14px;
+  border-radius: 8px;
   cursor: pointer;
+  color: #d1d5db;
+  font-size: 0.95rem;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  transition: background-color 0.12s ease;
 }
-.bookmark-delete-btn {
-  background: none;
-  border: none;
-  color: var(--accent-danger);
-  cursor: pointer;
-  font-size: 0.85rem;
-  padding: 2px 4px;
+.netflix-speed-row:active,
+.netflix-speed-row:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.netflix-speed-row.selected {
+  background-color: rgba(229, 9, 20, 0.15);
+  color: #ffffff;
 }
 
-/* Custom Speed Popover */
-.custom-speed-popover {
-  position: absolute;
-  bottom: 100%;
-  right: 0;
-  margin-bottom: 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  z-index: 100;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-secondary);
+/* Moments Grid */
+.netflix-moments-grid {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
 }
-.custom-speed-input {
-  width: 65px;
+.netflix-moment-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.moment-click-target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  flex: 1;
+}
+.moment-timestamp {
+  font-family: monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+}
+.moment-del-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 0.85rem;
   padding: 6px;
-  text-align: center;
-  border-radius: var(--radius-sm);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-primary);
-  outline: none;
+  cursor: pointer;
+}
+
+/* Episodes List */
+.netflix-episode-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.netflix-episode-row:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+.netflix-episode-row.active {
+  background: rgba(229, 9, 20, 0.12);
+  border-left: 3px solid #E50914;
+}
+.episode-index {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #6b7280;
+  width: 24px;
+}
+.netflix-episode-row.active .episode-index {
+  color: #E50914;
+}
+.episode-info {
+  flex: 1;
+  min-width: 0;
+}
+.episode-title {
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.episode-meta {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+.episode-playing-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #E50914;
+  background: rgba(229, 9, 20, 0.18);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.episode-play-icon {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+/* Audio & Subtitles 2-Column Layout */
+.netflix-audio-sub-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.audio-sub-column .column-title {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #9ca3af;
+  letter-spacing: 0.8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+}
+.column-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.column-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #d1d5db;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.column-option-row:active,
+.column-option-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+.column-option-row.selected {
+  color: #ffffff;
   font-weight: 700;
 }
 
-/* Fullscreen support */
-:fullscreen .player-view {
-  height: 100vh;
-}
-:-webkit-full-screen .player-view {
-  height: 100vh;
-}
+/* ==========================================================================
+   MOBILE RESPONSIVENESS & MEDIA QUERIES
+   ========================================================================== */
 
-/* Mobile responsive */
-@media (max-width: 900px) {
-  .player-view {
-    flex-direction: column;
-    height: auto;
-    min-height: calc(100vh - 65px);
-    overflow-y: auto;
+@media (max-width: 768px) {
+  .netflix-center-controls {
+    gap: 36px;
   }
-  .player-content-wrapper {
-    order: 1;
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    width: 100%;
-    flex: none;
-    background-color: #000;
+  .netflix-seek-circle-btn svg {
+    width: 42px;
+    height: 42px;
   }
-  .video-wrapper-container {
-    width: 100%;
-    height: auto;
+  .netflix-main-play-btn {
+    width: 64px;
+    height: 64px;
+    font-size: 1.6rem;
   }
-  .video-wrapper {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    height: auto;
-    min-height: 210px;
-    max-height: 50vh;
+  .netflix-action-bar {
+    justify-content: space-between;
   }
-  .lecture-menu {
-    order: 2;
-    width: 100%;
-    max-width: 100%;
-    height: auto;
-    max-height: none;
-    border-right: none;
-    border-top: 1px solid var(--border-primary);
-    margin-left: 0 !important;
-    flex: 1;
+  .netflix-bar-btn {
+    padding: 6px 6px;
+    font-size: 0.7rem;
   }
-  .sidebar-toggle-btn {
-    display: none;
+  .netflix-bar-btn i {
+    font-size: 1.05rem;
   }
-  .estimated-end-time {
-    display: none;
+  .netflix-episode-title {
+    font-size: 0.92rem;
   }
-}
-
-@media (max-width: 640px) {
-  .video-controls-container {
-    padding: 0 10px 8px;
-    gap: 6px;
-  }
-  .timeline-container {
-    height: 34px; /* Larger hit target for thumb scrubbing */
-  }
-  .timeline {
-    height: 6px;
-  }
-  .timeline::-webkit-slider-thumb {
-    width: 18px;
-    height: 18px;
-  }
-  .timeline::-moz-range-thumb {
-    width: 18px;
-    height: 18px;
-  }
-  .control-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 0.82rem;
-  }
-  .keyboard-shortcuts-btn {
-    display: none !important; /* Hide keyboard shortcut modal button on mobile touch devices */
-  }
-  .time-display {
-    font-size: 0.74rem;
-    letter-spacing: 0;
-  }
-  .left-controls {
-    gap: 4px;
-  }
-  .right-controls {
-    gap: 4px;
-  }
-  /* Bottom sheet style for popovers on mobile so they never overflow offscreen */
-  .bookmarks-popover,
-  .custom-speed-popover {
-    position: fixed;
-    top: auto;
-    bottom: 64px;
-    left: 12px;
-    right: 12px;
-    width: auto;
-    max-width: calc(100vw - 24px);
-    margin-bottom: 0;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
-    z-index: 1000;
-  }
-  .bookmarks-popover-list {
-    max-height: 200px;
-  }
-  .playlist-lecture-item {
-    padding: 12px 10px;
-  }
-  .playlist-lecture-checkbox {
-    width: 20px;
-    height: 20px;
-  }
-  .playlist-lecture-title {
-    font-size: 0.88rem;
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.3;
-  }
-  .skip-intro-btn {
-    right: 12px;
-    bottom: 60px;
-    padding: 6px 12px;
-    font-size: 0.8rem;
-  }
-  .unmute-btn {
-    top: 12px;
-    left: 12px;
-    padding: 6px 12px;
-    font-size: 0.8rem;
+  .netflix-audio-sub-columns {
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 }

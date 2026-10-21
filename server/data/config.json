@@ -4,21 +4,16 @@
       "id": "root_1792575242475_xs78y",
       "path": "F:\\GATE LECTURES",
       "label": "GATE LECTURES"
-    },
-    {
-      "id": "root_1792581183011_n9a0g",
-      "path": "E:\\projects\\STREAM STUDY\\server\\test\\fixtures",
-      "label": "Test Fixtures"
     }
   ],
-  "activeRootId": "root_1792581183011_n9a0g",
+  "activeRootId": "root_1792575242475_xs78y",
   "lectureProgress": {
     "lec_1": {
       "completed": false,
       "currentTime": 0,
       "duration": 2700,
       "bookmarks": [],
-      "lastWatched": "2026-10-21T11:13:02.363Z"
+      "lastWatched": "2026-10-21T14:19:10.747Z"
     },
     "test_lecture_bm": {
       "completed": false,
@@ -28,7 +23,7 @@
         45.2,
         350.8
       ],
-      "lastWatched": "2026-10-21T11:13:02.373Z"
+      "lastWatched": "2026-10-21T14:19:10.754Z"
     },
     "root_1792573165657_f06ok::Overview.mp4": {
       "completed": false,
@@ -60,10 +55,10 @@
     },
     "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/23. Linear Search part 1.mp4": {
       "completed": false,
-      "currentTime": 0.5,
+      "currentTime": 1369.6,
       "duration": 3748,
       "bookmarks": [],
-      "lastWatched": "2026-10-21T09:40:42.979Z"
+      "lastWatched": "2026-10-21T11:35:18.918Z"
     },
     "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/24. Linear Search part 2.mp4": {
       "completed": false,
@@ -268,7 +263,7 @@
       "currentTime": 2925.5,
       "duration": 7427,
       "bookmarks": [],
-      "lastWatched": "2026-10-21T09:59:56.018Z"
+      "lastWatched": "2026-10-21T11:13:40.875Z"
     },
     "root_1792575242475_xs78y::ALGORITHM/ADITIYA/CH 02 SORTING/14.mp4": {
       "completed": false,
@@ -286,10 +281,10 @@
     },
     "root_1792575242475_xs78y::COA/COA/CH 08 PIPE/24.mp4": {
       "completed": false,
-      "currentTime": 1570.1,
+      "currentTime": 2345.2,
       "duration": 6690,
       "bookmarks": [],
-      "lastWatched": "2026-10-21T10:09:18.598Z"
+      "lastWatched": "2026-10-21T10:26:55.002Z"
     },
     "root_1792575242475_xs78y::COA/COA/CH 08 PIPE/25.mp4": {
       "completed": false,
@@ -311,6 +306,251 @@
       "duration": 5508,
       "bookmarks": [],
       "lastWatched": "2026-10-21T09:46:48.980Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/1.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 1781,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.392Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/2..mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3730,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.396Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/3. Intro to C language part 2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 2954,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.399Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/4. Variable and constant, Data types.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3726,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.402Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/5. Data types, Arithmetic operators.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4354,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.404Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/6. Operators in C part 1.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3935,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.406Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/7. Operators in C part 2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4196,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.408Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/8..mp4": {
+      "completed": false,
+      "currentTime": 3,
+      "duration": 4108,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:47.982Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/9. IO in C , 1st C program.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 2637,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.413Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/10. control structures.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4452,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.415Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/11. Control Structures part 2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 2967,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.417Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/12. Concept of Short circuiting.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 2125,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.420Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/13. Else If Ladder.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 1947,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.422Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/14. Switch Control Structure.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4589,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.425Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/15. Loops part 1.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4342,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.428Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/16. Loops part 2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4801,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.430Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/17. Loops part 3.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3652,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.433Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/18. Loops part 4.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3958,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.435Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/19. Loops part 5.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3478,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.437Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/20. Loops part 6.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4036,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.440Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/21. 1D Array.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4248,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.442Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/22. 2D Array.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3299,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.445Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/23. 2D Array, String.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5152,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.447Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/24. Intro to Functions.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4754,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.450Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/25. Recursion part 1.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 6146,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.453Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/26. Recursion part 2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 7549,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.457Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/27. Storage Classes Part 1.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 6434,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.460Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/28. Storage Classes Part 2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5108,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.462Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/29. Preprocessor Directives, Structure.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3193,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.464Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/30. Union, Enum, Bitwise operators.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 7605,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.469Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/31. Introduction to Pointers.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5802,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.472Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/32. Introduction to Pointers, Pointer and function.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 7633,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.475Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/33. Pointer and 1D array.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 7078,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.478Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/34. Pointer and 2D array.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5581,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.480Z"
+    },
+    "root_1792575242475_xs78y::AMIT C/35. Pointer and 3D array, string, DMA.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 8694,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T12:08:43.483Z"
     }
   },
   "settings": {

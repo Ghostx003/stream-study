@@ -12,44 +12,52 @@ export default function CourseCard({ folder, onClick }) {
     completionPercentage = 0
   } = folder;
 
-  return (
-    <div className="course-card" onClick={onClick}>
-      <div>
-        <div className="course-card-header">
-          <div className="course-card-icon">
-            <i className="fas fa-folder"></i>
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="course-card-title">{name}</div>
-          </div>
-        </div>
+  const isFullyCompleted = videoCount > 0 && completedCount === videoCount;
 
-        <div className="course-card-counts">
-          <span><i className="fas fa-play-circle" style={{ marginRight: '4px', color: 'var(--accent-primary)' }}></i>{videoCount} {videoCount === 1 ? 'lecture' : 'lectures'}</span>
+  return (
+    <div className={`course-card ${isFullyCompleted ? 'completed-card' : ''}`} onClick={onClick}>
+      <div className="course-card-top">
+        <div className="course-card-icon-wrapper">
+          <i className={`fas fa-${subfoldersCount > 0 ? 'folder-tree' : 'film'}`}></i>
+        </div>
+        <div className="course-card-badges">
+          {videoCount > 0 && (
+            <span className="card-badge count-badge">
+              <i className="fas fa-play"></i> {videoCount} {videoCount === 1 ? 'ep' : 'eps'}
+            </span>
+          )}
           {subfoldersCount > 0 && (
-            <span><i className="fas fa-folder-tree" style={{ marginRight: '4px', color: 'var(--accent-blue)' }}></i>{subfoldersCount} {subfoldersCount === 1 ? 'subfolder' : 'subfolders'}</span>
+            <span className="card-badge folder-badge">
+              {subfoldersCount} {subfoldersCount === 1 ? 'folder' : 'folders'}
+            </span>
           )}
         </div>
       </div>
 
-      <div className="course-card-footer">
-        <div className="progress-bar-container">
+      <div className="course-card-body">
+        <h3 className="course-card-title">{name}</h3>
+        <div className="course-card-meta-row">
+          <span>{formatDuration(totalDuration)}</span>
+          {remainingDuration > 0 && completedCount > 0 && (
+            <span className="card-left-time">{formatDuration(remainingDuration)} left</span>
+          )}
+          {isFullyCompleted && (
+            <span className="card-completed-tag"><i className="fas fa-check-circle"></i> Done</span>
+          )}
+        </div>
+      </div>
+
+      {/* Progress Bar (Netflix Red) */}
+      <div className="course-card-progress">
+        <div className="card-progress-track">
           <div
-            className="progress-bar-fill"
+            className="card-progress-fill"
             style={{ width: `${completionPercentage}%` }}
           />
         </div>
-
-        <div className="course-card-durations">
-          <span>Completed: <strong>{completedCount}/{videoCount}</strong></span>
+        <div className="card-progress-text">
+          <span>{completedCount}/{videoCount} watched</span>
           <span>{completionPercentage}%</span>
-        </div>
-
-        <div className="course-card-durations" style={{ color: 'var(--text-muted)' }}>
-          <span>Total: {formatDuration(totalDuration)}</span>
-          <span style={{ color: 'var(--accent-primary)', fontWeight: '600' }}>
-            {remainingDuration > 0 ? `${formatDuration(remainingDuration)} left` : 'Completed'}
-          </span>
         </div>
       </div>
     </div>

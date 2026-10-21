@@ -13,31 +13,37 @@ export default function LectureList({
     <div className="lecture-list-card">
       <div className="lecture-list-header">
         <div className="lecture-list-title">
-          <i className="fas fa-video" style={{ color: 'var(--accent-blue)' }}></i>
+          <i className="fas fa-play-circle" style={{ color: '#E50914' }}></i>
           {title}
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>
+          <span className="lecture-list-count">
             ({lectures.length})
           </span>
         </div>
       </div>
 
       <div className="lecture-rows-container">
-        {lectures.map((lecture) => {
+        {lectures.map((lecture, idx) => {
           const isCompleted = !!lecture.completed;
           const watchedProgress = lecture.currentTime > 0 && lecture.duration > 0
-            ? Math.round((lecture.currentTime / lecture.duration) * 100)
+            ? Math.min(100, Math.round((lecture.currentTime / lecture.duration) * 100))
             : 0;
+          const hasSubtitles = lecture.subtitles && lecture.subtitles.length > 0;
 
           return (
-            <div key={lecture.id} className="lecture-row">
-              {/* Completion checkbox */}
-              <input
-                type="checkbox"
-                className="lecture-checkbox"
-                checked={isCompleted}
-                onChange={() => onToggleCompleted(lecture.id, !isCompleted)}
+            <div key={lecture.id} className={`lecture-row ${isCompleted ? 'is-completed' : ''}`}>
+              {/* Checkbox */}
+              <div
+                className="lecture-checkbox-wrapper"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleCompleted(lecture.id, !isCompleted);
+                }}
                 title={isCompleted ? 'Mark uncompleted' : 'Mark completed'}
-              />
+              >
+                <div className={`custom-check-box ${isCompleted ? 'checked' : ''}`}>
+                  {isCompleted ? <i className="fas fa-check"></i> : <span className="ep-num">{idx + 1}</span>}
+                </div>
+              </div>
 
               {/* Lecture Title & Details */}
               <div
@@ -49,37 +55,55 @@ export default function LectureList({
                 </div>
 
                 <div className="lecture-meta">
-                  <span>
-                    <i className="fas fa-clock" style={{ marginRight: '4px', opacity: 0.7 }}></i>
-                    {formatDuration(lecture.duration)}
+                  <span className="meta-duration">
+                    <i className="fas fa-clock"></i> {formatDuration(lecture.duration)}
                   </span>
 
                   {!isCompleted && lecture.currentTime > 0 && (
-                    <span>
-                      • {formatTime(lecture.currentTime)} watched ({watchedProgress}%)
+                    <span className="meta-watched">
+                      • {formatTime(lecture.currentTime)} watched
                     </span>
                   )}
 
                   {!isCompleted && lecture.remainingTime > 0 && (
-                    <span style={{ color: 'var(--accent-primary)' }}>
+                    <span className="meta-left">
                       • {formatDuration(lecture.remainingTime)} left
                     </span>
                   )}
 
                   {isCompleted && (
-                    <span style={{ color: 'var(--accent-primary)', fontWeight: '600' }}>
-                      <i className="fas fa-check-circle" style={{ marginRight: '4px' }}></i> Completed
+                    <span className="meta-done">
+                      • Completed
+                    </span>
+                  )}
+
+                  {hasSubtitles && (
+                    <span className="meta-sub-badge" title="Subtitles Available">
+                      <i className="fas fa-closed-captioning"></i> CC
                     </span>
                   )}
                 </div>
+
+                {/* In-progress mini bar under lecture */}
+                {watchedProgress > 0 && !isCompleted && (
+                  <div className="lecture-inline-progress">
+                    <div
+                      className="lecture-inline-progress-fill"
+                      style={{ width: `${watchedProgress}%` }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Play Action Button */}
               <div className="lecture-actions">
                 <button
                   className="play-btn-circle"
-                  onClick={() => onPlayLecture(lecture)}
-                  title="Play Lecture"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlayLecture(lecture);
+                  }}
+                  title="Play"
                 >
                   <i className="fas fa-play"></i>
                 </button>

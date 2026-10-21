@@ -57,6 +57,38 @@ export function parseRange(rangeHeader, totalSize) {
 }
 
 /**
+ * Serves subtitle files with automatic conversion from SRT to WebVTT.
+ */
+export function serveSubtitleFile(req, res, filePath) {
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    return res.status(404).send('Subtitle file not found');
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  let vttContent = content;
+
+  if (ext === '.srt' || ext === '.sub') {
+    // Convert SRT to WebVTT
+    vttContent = 'WEBVTT\n\n' + content
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+  } else if (!vttContent.trim().startsWith('WEBVTT')) {
+    vttContent = 'WEBVTT\n\n' + vttContent;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/vtt; charset=utf-8',
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'public, max-age=3600'
+  });
+  res.end(vttContent);
+}
+
+/**
  * Handles HTTP Range video streaming for a file.
  * Supports both GET and HEAD requests.
  */

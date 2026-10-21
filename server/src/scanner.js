@@ -7,6 +7,10 @@ const VIDEO_EXTENSIONS = new Set([
   '.mp4', '.mkv', '.webm', '.mov', '.avi', '.m4v', '.ts', '.ogv', '.flv'
 ]);
 
+const SUBTITLE_EXTENSIONS = new Set([
+  '.srt', '.vtt', '.sub', '.ass', '.ssa'
+]);
+
 const IGNORED_NAMES = new Set([
   '$recycle.bin', 'system volume information', '.git', '.vscode',
   'node_modules', '.ds_store', 'thumbs.db'
@@ -25,6 +29,14 @@ export function naturalCompare(a, b) {
 export function isVideoFile(fileName) {
   const ext = path.extname(fileName).toLowerCase();
   return VIDEO_EXTENSIONS.has(ext);
+}
+
+/**
+ * Checks if a filename has a supported subtitle extension
+ */
+export function isSubtitleFile(fileName) {
+  const ext = path.extname(fileName).toLowerCase();
+  return SUBTITLE_EXTENSIONS.has(ext);
 }
 
 /**
@@ -155,13 +167,18 @@ export async function scanFolder(root, relativeSubPath = '') {
 
   const rawFolders = [];
   const rawVideos = [];
+  const rawSubtitles = [];
 
   for (const entry of entries) {
     if (isIgnored(entry.name)) continue;
     if (entry.isDirectory()) {
       rawFolders.push(entry.name);
-    } else if (entry.isFile() && isVideoFile(entry.name)) {
-      rawVideos.push(entry.name);
+    } else if (entry.isFile()) {
+      if (isVideoFile(entry.name)) {
+        rawVideos.push(entry.name);
+      } else if (isSubtitleFile(entry.name)) {
+        rawSubtitles.push(entry.name);
+      }
     }
   }
 
@@ -224,6 +241,28 @@ export async function scanFolder(root, relativeSubPath = '') {
       currentFolderCompletedDuration += lectureDuration;
     }
 
+    // Associate subtitles matching this video
+    const videoBase = path.parse(videoName).name.toLowerCase();
+    const subtitles = [];
+    for (const subName of rawSubtitles) {
+      const subBase = path.parse(subName).name.toLowerCase();
+      // Match if subtitle filename starts with video basename or if single video in directory
+      if (subBase.startsWith(videoBase) || subBase === videoBase || rawVideos.length === 1) {
+        const langMatch = subName.match(/\.([a-z]{2,3})\.[^.]+$/i);
+        const langCode = langMatch ? langMatch[1].toLowerCase() : 'en';
+        const label = langMatch 
+          ? `Subtitle (${langMatch[1].toUpperCase()})` 
+          : `${subName}`;
+        subtitles.push({
+          id: subName,
+          fileName: subName,
+          label,
+          srclang: langCode,
+          src: `/api/subtitles?key=${encodeURIComponent(lectureKey)}&file=${encodeURIComponent(subName)}`
+        });
+      }
+    }
+
     lectures.push({
       id: lectureKey,
       name: path.parse(videoName).name,
@@ -234,7 +273,8 @@ export async function scanFolder(root, relativeSubPath = '') {
       remainingTime,
       completed,
       bookmarks: progress.bookmarks || [],
-      lastWatched: progress.lastWatched || null
+      lastWatched: progress.lastWatched || null,
+      subtitles
     });
   }
 
