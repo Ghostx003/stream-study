@@ -554,7 +554,7 @@
     }
   },
   "settings": {
-    "preferredPort": 5174,
+    "preferredPort": 5175,
     "defaultPlaybackSpeed": 1.75,
     "brownNoiseVolume": 0.2
   }

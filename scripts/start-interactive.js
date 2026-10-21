@@ -1,8 +1,10 @@
 import readline from 'readline';
 import { getLanAddresses, checkCandidatePorts, isPortAvailable, getTailscaleIp } from '../server/src/network.js';
+import { configManager } from '../server/src/configManager.js';
 import { startServer } from '../server/src/index.js';
 
-const CANDIDATE_PORTS = [5174, 5173, 5175, 5176];
+const preferred = configManager.getSettings().preferredPort || 5175;
+const CANDIDATE_PORTS = [preferred, 5175, 5174, 5173, 5176].filter((v, i, a) => a.indexOf(v) === i);
 
 async function main() {
   console.log('\n============================================================');
