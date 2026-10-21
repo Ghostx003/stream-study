@@ -17,17 +17,18 @@ export default function Navbar({
       </div>
 
       <div className="nav-actions">
-        {/* Media Root Indicator & Settings */}
+        {/* Media Root Indicator & Switcher Button */}
         <button
-          className="btn btn-secondary nav-folder-btn"
+          className="nav-folder-btn"
           onClick={onOpenSettings}
-          title="Folder Settings & Roots"
+          title="Switch Media Folder or Library"
         >
-          <i className="fas fa-folder-open" style={{ color: 'var(--accent-primary)' }}></i>
+          <span className="folder-pulse-dot"></span>
+          <i className="fas fa-folder-open folder-icon"></i>
           <span className="nav-folder-label">
             {activeRoot ? activeRoot.label : 'Select Folder'}
           </span>
-          <i className="fas fa-cog nav-folder-cog"></i>
+          <i className="fas fa-chevron-down folder-caret"></i>
         </button>
       </div>
     </nav>

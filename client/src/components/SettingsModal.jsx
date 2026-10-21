@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 
 export default function SettingsModal({
@@ -12,24 +12,72 @@ export default function SettingsModal({
 }) {
   const [newPath, setNewPath] = useState('');
   const [newLabel, setNewLabel] = useState('');
-  const [isBrowsing, setIsBrowsing] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Host Directory Explorer state
+  const [showExplorer, setShowExplorer] = useState(false);
+  const [explorerPath, setExplorerPath] = useState('');
+  const [explorerFolders, setExplorerFolders] = useState([]);
+  const [explorerParent, setExplorerParent] = useState(null);
+  const [explorerLoading, setExplorerLoading] = useState(false);
+  const [hostDrives, setHostDrives] = useState([]);
+
+  // Load host drives when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      api.getDrives().then(data => {
+        setHostDrives(data.drives || []);
+      }).catch(() => {
+        // Fallback default Windows drives
+        setHostDrives([
+          { path: 'C:\\', label: 'Local Disk (C:)' },
+          { path: 'D:\\', label: 'Local Disk (D:)' },
+          { path: 'E:\\', label: 'Local Disk (E:)' },
+          { path: 'F:\\', label: 'Local Disk (F:)' }
+        ]);
+      });
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  const handleBrowseNative = async () => {
-    setIsBrowsing(true);
+  // Open directory explorer at specific path (or drives root if empty)
+  const openExplorer = async (path = '') => {
+    setShowExplorer(true);
+    setExplorerLoading(true);
     setErrorMsg('');
     try {
-      const res = await api.pickFolderDialog();
-      if (!res.cancelled && res.path) {
-        setNewPath(res.path);
-      }
-    } catch (e) {
-      setErrorMsg('Could not open folder picker dialog');
+      const data = await api.browseDirectory(path);
+      setExplorerPath(data.currentPath || '');
+      setExplorerParent(data.parentPath !== undefined ? data.parentPath : null);
+      setExplorerFolders(data.folders || []);
+    } catch (err) {
+      setErrorMsg(err.message || 'Could not read directory');
     } finally {
-      setIsBrowsing(false);
+      setExplorerLoading(false);
+    }
+  };
+
+  const handleSelectExplorerFolder = (folder) => {
+    if (folder.isDrive) {
+      openExplorer(folder.path);
+    } else {
+      openExplorer(folder.path);
+    }
+  };
+
+  const handleConfirmExplorerPath = () => {
+    if (explorerPath) {
+      setNewPath(explorerPath);
+      // Auto-suggest label from last folder name
+      const clean = explorerPath.replace(/[\\/]+$/, '');
+      const folderName = clean.split(/[\\/]/).pop() || clean;
+      if (!newLabel) {
+        setNewLabel(folderName);
+      }
+      setShowExplorer(false);
+      showToast?.(`Selected: ${folderName}`);
     }
   };
 
@@ -39,10 +87,13 @@ export default function SettingsModal({
     setIsAdding(true);
     setErrorMsg('');
     try {
-      const res = await api.addRoot(newPath.trim(), newLabel.trim() || null);
+      const cleanPath = newPath.trim();
+      const defaultLabel = cleanPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || cleanPath;
+      const res = await api.addRoot(cleanPath, newLabel.trim() || defaultLabel);
       if (res.success) {
         setNewPath('');
         setNewLabel('');
+        setShowExplorer(false);
         showToast?.('Folder added successfully!');
         onRootChanged?.();
       }
@@ -66,7 +117,7 @@ export default function SettingsModal({
 
   const handleRemoveRoot = async (rootId, e) => {
     e.stopPropagation();
-    if (window.confirm('Remove this folder from Courseflix LAN? (Video files on disk will not be deleted)')) {
+    if (window.confirm('Remove this folder from Courseflix? (Video files on disk will NOT be deleted)')) {
       try {
         await api.removeRoot(rootId);
         showToast?.('Folder removed from library');
@@ -79,75 +130,65 @@ export default function SettingsModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-container settings-modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title">
-            <i className="fas fa-cog" style={{ color: 'var(--accent-primary)' }}></i>
-            Library & Network Settings
+            <i className="fas fa-folder-open" style={{ color: 'var(--accent-primary)' }}></i>
+            Media Folders & Library
           </div>
           <button className="btn-icon" onClick={onClose} title="Close">&times;</button>
         </div>
 
         <div className="modal-body">
-          {/* Registered media folders */}
+          {/* Section 1: Configured Media Folders */}
           <div>
-            <h4 style={{ fontSize: '0.95rem', marginBottom: '10px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <i className="fas fa-folder"></i> Configured Media Folders
-            </h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <i className="fas fa-layer-group" style={{ color: 'var(--accent-primary)' }}></i>
+                Configured Folders ({roots.length})
+              </h4>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tap to switch active</span>
+            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className="settings-roots-list">
               {roots.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No folders added yet.</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '12px', textAlign: 'center', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)' }}>
+                  No media folders configured yet. Add your lectures folder below.
+                </div>
               ) : (
                 roots.map((r) => {
                   const isActive = activeRoot && activeRoot.id === r.id;
                   return (
                     <div
                       key={r.id}
-                      className={`course-card ${isActive ? 'active-root' : ''}`}
+                      className={`settings-root-item ${isActive ? 'is-active' : ''}`}
                       onClick={() => !isActive && handleSelectRoot(r.id)}
-                      style={{
-                        padding: '10px 14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: isActive ? 'default' : 'pointer',
-                        border: isActive ? '1px solid var(--accent-primary)' : '1px solid var(--border-primary)',
-                        borderRadius: 'var(--radius-sm)'
-                      }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                        <i
-                          className={`fas ${isActive ? 'fa-folder-open' : 'fa-folder'}`}
-                          style={{ color: isActive ? 'var(--accent-primary)' : 'var(--text-secondary)' }}
-                        ></i>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {r.label}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {r.path}
-                          </div>
+                      <div className="root-item-info">
+                        <div className="root-item-icon">
+                          <i className={`fas ${isActive ? 'fa-folder-open' : 'fa-folder'}`}></i>
+                        </div>
+                        <div className="root-item-text">
+                          <div className="root-item-title">{r.label}</div>
+                          <div className="root-item-path">{r.path}</div>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      <div className="root-item-actions">
                         {isActive ? (
-                          <span className="badge" style={{ background: 'var(--accent-primary)', color: '#000', fontSize: '0.7rem' }}>
-                            Active
+                          <span className="badge-active-root">
+                            <i className="fas fa-check"></i> Active
                           </span>
                         ) : (
                           <button
-                            className="btn btn-secondary"
-                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                            className="btn-switch-root"
                             onClick={() => handleSelectRoot(r.id)}
                           >
                             Switch
                           </button>
                         )}
                         <button
-                          className="btn-icon"
-                          style={{ color: 'var(--accent-danger)', padding: '4px' }}
+                          className="btn-delete-root"
                           title="Remove folder"
                           onClick={(e) => handleRemoveRoot(r.id, e)}
                         >
@@ -161,36 +202,128 @@ export default function SettingsModal({
             </div>
           </div>
 
-          {/* Add new folder form */}
-          <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border-primary)' }}>
-            <h4 style={{ fontSize: '0.95rem', marginBottom: '10px', color: 'var(--text-primary)' }}>
+          {/* Section 2: Add Another Media Folder */}
+          <div className="add-root-section">
+            <h4 style={{ fontSize: '0.95rem', marginBottom: '8px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="fas fa-plus-circle" style={{ color: 'var(--accent-primary)' }}></i>
               Add Another Media Folder
             </h4>
 
             {errorMsg && (
-              <div style={{ color: 'var(--accent-danger)', fontSize: '0.85rem', marginBottom: '8px' }}>
+              <div style={{ color: '#ef4444', fontSize: '0.82rem', marginBottom: '8px', background: 'rgba(239, 68, 68, 0.12)', padding: '6px 10px', borderRadius: '4px' }}>
                 {errorMsg}
               </div>
             )}
 
-            <form onSubmit={handleAddRoot} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Quick Drive Selector Chips */}
+            <div className="quick-drives-row">
+              <span className="quick-drives-title">Browse Drives:</span>
+              {hostDrives.map(d => (
+                <button
+                  key={d.path}
+                  type="button"
+                  className="quick-drive-chip"
+                  onClick={() => openExplorer(d.path)}
+                >
+                  <i className="fas fa-hdd"></i> {d.path}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="quick-drive-chip browse-all-chip"
+                onClick={() => openExplorer('')}
+              >
+                <i className="fas fa-search"></i> All Drives
+              </button>
+            </div>
+
+            {/* In-App Visual Host Directory Explorer */}
+            {showExplorer && (
+              <div className="in-app-explorer-container">
+                <div className="explorer-header">
+                  <div className="explorer-path-bar">
+                    <button
+                      className="explorer-nav-btn"
+                      onClick={() => openExplorer(explorerParent !== null ? explorerParent : '')}
+                      title="Go to parent directory"
+                    >
+                      <i className="fas fa-arrow-up"></i>
+                    </button>
+                    <span className="explorer-current-path" title={explorerPath || 'Computer Drives'}>
+                      {explorerPath || 'Host PC Drives'}
+                    </span>
+                  </div>
+                  <button
+                    className="btn-close-explorer"
+                    onClick={() => setShowExplorer(false)}
+                    title="Close Explorer"
+                  >
+                    &times;
+                  </button>
+                </div>
+
+                <div className="explorer-folder-list">
+                  {explorerLoading ? (
+                    <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                      <i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i> Loading folders on PC...
+                    </div>
+                  ) : explorerFolders.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      No subfolders found in this directory.
+                    </div>
+                  ) : (
+                    explorerFolders.map(f => (
+                      <div
+                        key={f.path}
+                        className="explorer-folder-row"
+                        onClick={() => handleSelectExplorerFolder(f)}
+                      >
+                        <i className={`fas ${f.isDrive ? 'fa-hdd' : 'fa-folder'}`} style={{ color: f.isDrive ? '#38bdf8' : '#f59e0b' }}></i>
+                        <span className="explorer-folder-name">{f.name}</span>
+                        <i className="fas fa-chevron-right explorer-row-chevron"></i>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {explorerPath && (
+                  <div className="explorer-footer">
+                    <button
+                      type="button"
+                      className="btn-confirm-folder"
+                      onClick={handleConfirmExplorerPath}
+                    >
+                      <i className="fas fa-check"></i> Select "{explorerPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || explorerPath}"
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Manual Path Input Form */}
+            <form onSubmit={handleAddRoot} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input
                   type="text"
                   className="form-input"
-                  style={{ flex: 1 }}
-                  placeholder="Absolute folder path on host computer"
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.88rem' }}
+                  placeholder="Absolute folder path on host PC (e.g. F:\GATE LECTURES)"
                   value={newPath}
-                  onChange={(e) => setNewPath(e.target.value)}
+                  onChange={(e) => {
+                    setNewPath(e.target.value);
+                    if (!newLabel && e.target.value) {
+                      const clean = e.target.value.replace(/[\\/]+$/, '');
+                      setNewLabel(clean.split(/[\\/]/).pop() || '');
+                    }
+                  }}
                 />
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={handleBrowseNative}
-                  disabled={isBrowsing}
-                  title="Browse"
+                  onClick={() => openExplorer(newPath || '')}
+                  title="Browse Host PC Folders"
                 >
-                  <i className="fas fa-desktop"></i>
+                  <i className="fas fa-folder-open"></i> Browse
                 </button>
               </div>
 
@@ -199,7 +332,7 @@ export default function SettingsModal({
                   type="text"
                   className="form-input"
                   style={{ flex: 1 }}
-                  placeholder="Display label (Optional)"
+                  placeholder="Folder display name (e.g. GATE Computer Science)"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
                 />
@@ -207,68 +340,12 @@ export default function SettingsModal({
                   type="submit"
                   className="btn btn-primary"
                   disabled={isAdding || !newPath.trim()}
+                  style={{ minWidth: '90px' }}
                 >
-                  <i className="fas fa-plus"></i> Add
+                  {isAdding ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-plus"></i> Add</>}
                 </button>
               </div>
             </form>
-          </div>
-
-          {/* Local Wi-Fi Network details */}
-          <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border-primary)', fontSize: '0.85rem' }}>
-            <h4 style={{ fontSize: '0.95rem', marginBottom: '8px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <i className="fas fa-wifi" style={{ color: 'var(--accent-blue)' }}></i> Local Wi-Fi Access
-            </h4>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '8px' }}>
-              Access Courseflix from any device on your same home Wi-Fi:
-            </p>
-            <div style={{ background: 'var(--bg-primary)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-primary)', fontFamily: 'monospace', color: 'var(--accent-primary)', fontWeight: '700' }}>
-              {networkInfo?.lanUrl}
-            </div>
-            {networkInfo?.allLanIps && networkInfo.allLanIps.length > 1 && (
-              <div style={{ marginTop: '6px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Additional LAN interfaces: {networkInfo.allLanIps.slice(1).map(ip => `http://${ip}:${networkInfo.port}`).join(', ')}
-              </div>
-            )}
-          </div>
-
-          {/* Tailscale Remote 24/7 Streaming */}
-          <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border-primary)', fontSize: '0.85rem' }}>
-            <h4 style={{ fontSize: '0.95rem', marginBottom: '8px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <i className="fas fa-globe" style={{ color: '#22c55e' }}></i> Tailscale Remote Streaming (100km Away)
-            </h4>
-
-            {networkInfo?.tailscaleUrl ? (
-              <div>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Tailscale is <strong>active</strong>! Open this link on your phone/tablet from any cellular 4G/5G or external Wi-Fi:
-                </p>
-                <div style={{ background: 'var(--bg-primary)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(34, 197, 94, 0.4)', fontFamily: 'monospace', color: '#86efac', fontWeight: '700', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>{networkInfo.tailscaleUrl}</span>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ padding: '3px 8px', fontSize: '0.75rem' }}
-                    onClick={() => {
-                      navigator.clipboard.writeText(networkInfo.tailscaleUrl);
-                      showToast?.('Copied Tailscale URL!');
-                    }}
-                  >
-                    <i className="fas fa-copy"></i> Copy
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-primary)' }}>
-                <p style={{ color: 'var(--text-secondary)', margin: '0 0 6px 0', lineHeight: '1.4' }}>
-                  Tailscale is not running yet. To stream remotely from 100km away without router setup:
-                </p>
-                <ol style={{ margin: '0 0 0 16px', padding: 0, color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.5' }}>
-                  <li>Install <strong>Tailscale</strong> on this PC and on your phone (free).</li>
-                  <li>Sign in with the same Google or Microsoft account on both.</li>
-                  <li>Open Courseflix using your PC's Tailscale IP from anywhere in the world!</li>
-                </ol>
-              </div>
-            )}
           </div>
         </div>
 

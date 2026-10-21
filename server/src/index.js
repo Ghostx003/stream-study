@@ -50,30 +50,81 @@ app.get('/api/network/candidate-ports', async (req, res) => {
   res.json({ ports });
 });
 
-// 2. Folder browser dialog (Windows native)
-app.post('/api/system/pick-folder', (req, res) => {
-  const psScript = `
-    Add-Type -AssemblyName System.Windows.Forms
-    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-    $dialog.Description = "Select your Courseflix Lectures folder"
-    $dialog.ShowNewFolderButton = $false
-    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-        Write-Output $dialog.SelectedPath
-    } else {
-        Write-Output "CANCELLED"
-    }
-  `;
+// 2. Folder browser dialog & Host Directory Explorer
+app.get('/api/system/drives', (req, res) => {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const drives = [];
+  for (const letter of letters) {
+    const drivePath = `${letter}:\\`;
+    try {
+      if (fs.existsSync(drivePath)) {
+        drives.push({ path: drivePath, label: `Local Disk (${letter}:)` });
+      }
+    } catch {}
+  }
+  res.json({ drives });
+});
 
-  execFile('powershell', ['-NoProfile', '-Command', psScript], { timeout: 60000 }, (err, stdout) => {
-    if (err) {
-      return res.status(500).json({ error: 'Folder dialog failed', details: err.message });
+app.get('/api/system/browse', (req, res) => {
+  const targetPath = req.query.path ? String(req.query.path).trim() : '';
+
+  if (!targetPath) {
+    // Return root drives on host PC
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const drives = [];
+    for (const letter of letters) {
+      const drivePath = `${letter}:\\`;
+      try {
+        if (fs.existsSync(drivePath)) {
+          drives.push({ name: `Local Disk (${letter}:)`, path: drivePath, isDrive: true });
+        }
+      } catch {}
     }
-    const chosen = stdout.trim();
-    if (!chosen || chosen === 'CANCELLED') {
-      return res.json({ cancelled: true });
+    return res.json({ currentPath: '', parentPath: null, folders: drives });
+  }
+
+  try {
+    const resolved = path.resolve(targetPath);
+    if (!fs.existsSync(resolved)) {
+      return res.status(404).json({ error: 'Directory does not exist' });
     }
-    res.json({ path: chosen, cancelled: false });
-  });
+    const stat = fs.statSync(resolved);
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ error: 'Path is not a directory' });
+    }
+
+    const entries = fs.readdirSync(resolved, { withFileTypes: true });
+    const folders = entries
+      .filter(e => {
+        try {
+          return e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('$');
+        } catch {
+          return false;
+        }
+      })
+      .map(e => ({
+        name: e.name,
+        path: path.join(resolved, e.name)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+    const parsed = path.parse(resolved);
+    const isDriveRoot = resolved.toLowerCase() === parsed.root.toLowerCase();
+    const parentPath = isDriveRoot ? '' : path.dirname(resolved);
+
+    res.json({
+      currentPath: resolved,
+      parentPath,
+      folders
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Cannot read directory', details: err.message });
+  }
+});
+
+app.post('/api/system/pick-folder', (req, res) => {
+  // Gracefully instruct client to use the in-app Web Folder Explorer
+  res.json({ cancelled: true, useWebPicker: true });
 });
 
 // 3. Media roots management

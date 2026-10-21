@@ -43,6 +43,10 @@ export const api = {
     method: 'POST'
   }),
 
+  // Host Directory Explorer (Works directly on mobile phones & remote access)
+  getDrives: () => fetchJson('/system/drives'),
+  browseDirectory: (targetPath = '') => fetchJson(`/system/browse?path=${encodeURIComponent(targetPath)}`),
+
   // Filesystem scanning
   scanFolder: (rootId = null, subPath = '') => {
     const params = new URLSearchParams();

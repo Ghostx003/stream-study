@@ -253,6 +253,27 @@ export default function App() {
     window.location.hash = currentPath ? `#/folder/${encodeURIComponent(currentPath)}` : '#/';
   };
 
+  // Switch active media root directly from chips
+  const handleSelectRoot = useCallback(async (rootId) => {
+    try {
+      setIsLoading(true);
+      await api.selectRoot(rootId);
+      const rootsData = await api.getRoots();
+      setRoots(rootsData.roots || []);
+      const root = rootsData.activeRoot || null;
+      setActiveRoot(root);
+      if (root) {
+        window.location.hash = '#/';
+        await loadFolderContents(root.id, '');
+        showToast(`Switched library: ${root.label}`);
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to switch folder', true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadFolderContents, showToast]);
+
   // Root changed from setup or settings
   const handleRootConfigured = async (newRoot) => {
     setActiveRoot(newRoot);
@@ -313,6 +334,40 @@ export default function App() {
             />
           ) : (
             <>
+              {/* Library / Media Folder Switcher Bar (Always visible on phone & desktop) */}
+              {roots.length > 0 && (
+                <div className="library-switcher-bar">
+                  <div className="switcher-chips-scroll">
+                    <span className="switcher-prefix">
+                      <i className="fas fa-layer-group" style={{ color: 'var(--accent-primary)' }}></i>
+                      <span>Folders:</span>
+                    </span>
+                    {roots.map((r) => {
+                      const isActive = activeRoot && activeRoot.id === r.id;
+                      return (
+                        <button
+                          key={r.id}
+                          className={`switcher-chip ${isActive ? 'active' : ''}`}
+                          onClick={() => !isActive && handleSelectRoot(r.id)}
+                          title={r.path}
+                        >
+                          <i className={`fas ${isActive ? 'fa-check-circle' : 'fa-folder'}`}></i>
+                          <span className="switcher-chip-name">{r.label}</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      className="switcher-chip add-folder-chip"
+                      onClick={() => setShowSettings(true)}
+                      title="Add or browse more folders"
+                    >
+                      <i className="fas fa-plus"></i>
+                      <span>Add Folder</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Breadcrumb Navigation */}
               <Breadcrumbs
                 breadcrumbs={breadcrumbs}
