@@ -1,0 +1,316 @@
+{
+  "mediaRoots": [
+    {
+      "id": "root_1792575242475_xs78y",
+      "path": "F:\\GATE LECTURES",
+      "label": "GATE LECTURES"
+    }
+  ],
+  "activeRootId": "root_1792575242475_xs78y",
+  "lectureProgress": {
+    "lec_1": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 2700,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:00:47.871Z"
+    },
+    "test_lecture_bm": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 0,
+      "bookmarks": [
+        45.2,
+        350.8
+      ],
+      "lastWatched": "2026-10-21T09:00:47.878Z"
+    },
+    "root_1792573165657_f06ok::Overview.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T08:59:25.719Z"
+    },
+    "root_1792573165657_f06ok::Mathematics/Calculus/Lecture 1 - Limits.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:00:48.315Z"
+    },
+    "root_1792573165657_f06ok::Mathematics/Calculus/Lecture 2 - Derivatives.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:00:48.254Z"
+    },
+    "root_1792573165657_f06ok::Mathematics/Calculus/Lecture 10 - Integration.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T08:59:25.765Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/23. Linear Search part 1.mp4": {
+      "completed": false,
+      "currentTime": 0.5,
+      "duration": 3748,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:40:42.979Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/24. Linear Search part 2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3028,
+      "bookmarks": [
+        371.4
+      ],
+      "lastWatched": "2026-10-21T09:36:45.436Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/25. Binary search part 1.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3978,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.011Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/26. Binary search part 2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3171,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.086Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/27. Binary search part 3.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3275,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.162Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/28. Binary search part 4.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3037,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.235Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/29 Binary search part 5.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4645,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.337Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/30. Binary search part 6.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5610,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.445Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/31. Selection Sort.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5485,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.565Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/32. Bubble Sort.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4731,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.660Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/33. Insertion Sort.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5882,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.786Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/34. Counting Sort.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3389,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.856Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/35. Radix Sort.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4706,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:13.958Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/36. Heap Sort Part 1.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5689,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:14.090Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/37. Heap Sort Part 2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5944,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:14.214Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/38. Heap Sort Part 3.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4688,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:14.304Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/39. Heap sprt part 4.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5106,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:14.429Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/40. Heap Sort Part 5.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5727,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:14.542Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/41. Heap Sort Part 6.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 3445,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:34:14.624Z"
+    },
+    "root_1792575242475_xs78y::RANK IMPORVMENT COURCE/1500/1500 2024/ALGO/Algorithm 01 Algorithm (Part 01).mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 6305,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:37:44.381Z"
+    },
+    "root_1792575242475_xs78y::RANK IMPORVMENT COURCE/1500/1500 2024/ALGO/Algorithm 02 Algorithm (Part 02).mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 6568,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:37:44.651Z"
+    },
+    "root_1792575242475_xs78y::RANK IMPORVMENT COURCE/1500/1500 2024/ALGO/Algorithm 03 Algorithm (Part 03).mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5531,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:37:44.848Z"
+    },
+    "root_1792575242475_xs78y::RANK IMPORVMENT COURCE/1500/1500 2024/ALGO/Algorithm 04 Algorithm (Part 04) Extra Class.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 4995,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:37:45.057Z"
+    },
+    "root_1792575242475_xs78y::COA/basic of coa/1.mp4": {
+      "completed": false,
+      "currentTime": 969.7,
+      "duration": 2220,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:44:24.023Z"
+    },
+    "root_1792575242475_xs78y::COA/basic of coa/2.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 2538,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:38:14.105Z"
+    },
+    "root_1792575242475_xs78y::COA/basic of coa/3.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 2251,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:38:14.193Z"
+    },
+    "root_1792575242475_xs78y::COA/basic of coa/4.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 2857,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:38:14.303Z"
+    },
+    "root_1792575242475_xs78y::COA/basic of coa/5.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 1383,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:38:14.364Z"
+    },
+    "root_1792575242475_xs78y::COA/basic of coa/6.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 1626,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:38:14.421Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/ADITIYA/CH 02 SORTING/13.mp4": {
+      "completed": false,
+      "currentTime": 2925.5,
+      "duration": 7427,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:59:56.018Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/ADITIYA/CH 02 SORTING/14.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 8349,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:39:57.160Z"
+    },
+    "root_1792575242475_xs78y::ALGORITHM/ADITIYA/CH 02 SORTING/15.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 8155,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:39:57.360Z"
+    },
+    "root_1792575242475_xs78y::COA/COA/CH 08 PIPE/24.mp4": {
+      "completed": false,
+      "currentTime": 1570.1,
+      "duration": 6690,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T10:09:18.598Z"
+    },
+    "root_1792575242475_xs78y::COA/COA/CH 08 PIPE/25.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 5876,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:44:34.983Z"
+    },
+    "root_1792575242475_xs78y::COA/COA/CH 08 PIPE/26.mp4": {
+      "completed": false,
+      "currentTime": 0,
+      "duration": 6356,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:44:35.211Z"
+    },
+    "root_1792575242475_xs78y::COA/COA/CH 08 PIPE/27.mp4": {
+      "completed": false,
+      "currentTime": 120.2,
+      "duration": 5508,
+      "bookmarks": [],
+      "lastWatched": "2026-10-21T09:46:48.980Z"
+    }
+  },
+  "settings": {
+    "preferredPort": 5174,
+    "defaultPlaybackSpeed": 1.75,
+    "brownNoiseVolume": 0.2
+  }
+}
