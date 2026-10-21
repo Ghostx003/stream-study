@@ -1,16 +1,24 @@
 import readline from 'readline';
-import { getLanAddresses, checkCandidatePorts, isPortAvailable } from '../server/src/network.js';
+import { getLanAddresses, checkCandidatePorts, isPortAvailable, getTailscaleIp } from '../server/src/network.js';
 import { startServer } from '../server/src/index.js';
 
 const CANDIDATE_PORTS = [5174, 5173, 5175, 5176];
 
 async function main() {
   console.log('\n============================================================');
-  console.log('   Courseflix LAN — Local Network Lecture Streaming');
+  console.log('   Courseflix — LAN & Tailscale Remote Streaming');
   console.log('============================================================');
 
   const lan = getLanAddresses();
-  console.log(`\n  Detected LAN IPv4: ${lan.primary}`);
+  const tailscaleIp = getTailscaleIp();
+
+  console.log(`\n  Local Host IP:     127.0.0.1`);
+  console.log(`  Wi-Fi / LAN IP:    ${lan.primary}`);
+  if (tailscaleIp) {
+    console.log(`  Tailscale IP:      ${tailscaleIp}  (Remote streaming active)`);
+  } else {
+    console.log(`  Tailscale IP:      Offline (Start Tailscale app to stream 100km away)`);
+  }
   if (lan.all.length > 1) {
     console.log(`  Other Interfaces:  ${lan.all.slice(1).join(', ')}`);
   }
@@ -75,7 +83,7 @@ async function main() {
     chosenPort = fallback;
   }
 
-  console.log(`\n  Starting Courseflix LAN Server on port ${chosenPort}...`);
+  console.log(`\n  Starting Courseflix Server on port ${chosenPort}...`);
 
   try {
     await startServer(chosenPort);

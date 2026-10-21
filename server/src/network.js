@@ -2,6 +2,27 @@ import os from 'os';
 import net from 'net';
 
 /**
+ * Detects Tailscale IPv4 address if Tailscale is running on this machine.
+ * @returns {string|null}
+ */
+export function getTailscaleIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        // Tailscale addresses reside in 100.64.0.0/10 or adapter has 'Tailscale'
+        const isTailscaleRange = /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(iface.address);
+        const isTailscaleName = /tailscale/i.test(name);
+        if (isTailscaleRange || isTailscaleName) {
+          return iface.address;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Detects all non-internal IPv4 LAN addresses on the host.
  * @returns {{ primary: string, all: string[] }}
  */
@@ -11,14 +32,16 @@ export function getLanAddresses() {
 
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
-      // IPv4 only, skip loopback (127.0.0.1)
-      if (iface.family === 'IPv4' && !iface.internal) {
+      // IPv4 only, skip loopback (127.0.0.1) and Tailscale range
+      const isTailscaleRange = /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(iface.address);
+      const isTailscaleName = /tailscale/i.test(name);
+      if (iface.family === 'IPv4' && !iface.internal && !isTailscaleRange && !isTailscaleName) {
         addresses.push(iface.address);
       }
     }
   }
 
-  // Prioritize private network addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+  // Prioritize Wi-Fi / physical private network addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
   addresses.sort((a, b) => {
     const isAPrivate = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(a);
     const isBPrivate = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(b);
@@ -61,7 +84,7 @@ export function isPortAvailable(port, host = '0.0.0.0') {
  * @param {number[]} candidatePorts
  * @returns {Promise<Array<{ port: number, available: boolean }>>}
  */
-export async function checkCandidatePorts(candidatePorts = [5173, 5174, 5175, 5176]) {
+export async function checkCandidatePorts(candidatePorts = [5174, 5173, 5175, 5176]) {
   const results = [];
   for (const port of candidatePorts) {
     const available = await isPortAvailable(port);

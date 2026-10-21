@@ -8,12 +8,21 @@ export default function Navbar({
   showToast
 }) {
   const lanUrl = networkInfo?.lanUrl || '';
+  const tailscaleUrl = networkInfo?.tailscaleUrl || '';
 
   const copyLanUrl = (e) => {
     e.stopPropagation();
     if (lanUrl) {
       navigator.clipboard.writeText(lanUrl);
-      showToast?.(`Copied LAN URL: ${lanUrl}`);
+      showToast?.(`Copied Home Wi-Fi URL: ${lanUrl}`);
+    }
+  };
+
+  const copyTailscaleUrl = (e) => {
+    e.stopPropagation();
+    if (tailscaleUrl) {
+      navigator.clipboard.writeText(tailscaleUrl);
+      showToast?.(`Copied Tailscale URL: ${tailscaleUrl}`);
     }
   };
 
@@ -29,12 +38,26 @@ export default function Navbar({
       </div>
 
       <div className="nav-actions">
-        {/* LAN Address Pill with Copy */}
+        {/* Tailscale Remote Access Pill */}
+        {tailscaleUrl && (
+          <div
+            className="nav-lan-badge"
+            onClick={copyTailscaleUrl}
+            title="Click to copy Tailscale Remote URL (Stream from 100km away)"
+            style={{ background: 'rgba(34, 197, 94, 0.15)', borderColor: 'rgba(34, 197, 94, 0.4)' }}
+          >
+            <div className="lan-dot" style={{ background: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></div>
+            <span style={{ color: '#86efac' }}>Tailscale: {networkInfo?.tailscaleIp}:{networkInfo?.port}</span>
+            <i className="fas fa-copy" style={{ fontSize: '0.75rem', opacity: 0.8, color: '#86efac' }}></i>
+          </div>
+        )}
+
+        {/* Home Wi-Fi LAN Pill */}
         {lanUrl && (
           <div
             className="nav-lan-badge"
             onClick={copyLanUrl}
-            title="Click to copy LAN address to open on your phone or other device"
+            title="Click to copy Home Wi-Fi LAN address"
           >
             <div className="lan-dot"></div>
             <span>LAN: {networkInfo?.primaryLanIp}:{networkInfo?.port}</span>

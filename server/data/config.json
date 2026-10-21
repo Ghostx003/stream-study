@@ -4,16 +4,21 @@
       "id": "root_1792575242475_xs78y",
       "path": "F:\\GATE LECTURES",
       "label": "GATE LECTURES"
+    },
+    {
+      "id": "root_1792581183011_n9a0g",
+      "path": "E:\\projects\\STREAM STUDY\\server\\test\\fixtures",
+      "label": "Test Fixtures"
     }
   ],
-  "activeRootId": "root_1792575242475_xs78y",
+  "activeRootId": "root_1792581183011_n9a0g",
   "lectureProgress": {
     "lec_1": {
       "completed": false,
       "currentTime": 0,
       "duration": 2700,
       "bookmarks": [],
-      "lastWatched": "2026-10-21T09:00:47.871Z"
+      "lastWatched": "2026-10-21T11:13:02.363Z"
     },
     "test_lecture_bm": {
       "completed": false,
@@ -23,7 +28,7 @@
         45.2,
         350.8
       ],
-      "lastWatched": "2026-10-21T09:00:47.878Z"
+      "lastWatched": "2026-10-21T11:13:02.373Z"
     },
     "root_1792573165657_f06ok::Overview.mp4": {
       "completed": false,

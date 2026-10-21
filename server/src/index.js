@@ -5,7 +5,7 @@ import fs from 'fs';
 import { execFile } from 'child_process';
 import { fileURLToPath } from 'url';
 
-import { getLanAddresses, checkCandidatePorts } from './network.js';
+import { getLanAddresses, checkCandidatePorts, getTailscaleIp } from './network.js';
 import { configManager } from './configManager.js';
 import { scanFolder, resolveSecurePath, generateLectureKey } from './scanner.js';
 import { streamVideoFile } from './streamer.js';
@@ -31,10 +31,13 @@ const HOST = '0.0.0.0';
 // 1. Network info
 app.get('/api/network', (req, res) => {
   const lan = getLanAddresses();
+  const tailscaleIp = getTailscaleIp();
   const currentPort = req.socket.localPort || PORT;
   res.json({
     primaryLanIp: lan.primary,
     allLanIps: lan.all,
+    tailscaleIp: tailscaleIp,
+    tailscaleUrl: tailscaleIp ? `http://${tailscaleIp}:${currentPort}` : null,
     port: currentPort,
     localUrl: `http://localhost:${currentPort}`,
     lanUrl: `http://${lan.primary}:${currentPort}`
@@ -272,16 +275,22 @@ export function startServer(port = PORT, host = HOST) {
   return new Promise((resolve, reject) => {
     const server = app.listen(port, host, () => {
       const lan = getLanAddresses();
+      const tailscaleIp = getTailscaleIp();
       console.log('\n============================================================');
-      console.log('  Courseflix LAN - Local Lecture Streaming Server Running');
+      console.log('  Courseflix — LAN & Tailscale Remote Streaming Server');
       console.log('============================================================');
       console.log(`  Local URL:        http://localhost:${port}`);
       console.log(`  LAN URL (Wi-Fi):  http://${lan.primary}:${port}`);
+      if (tailscaleIp) {
+        console.log(`  Tailscale Remote: http://${tailscaleIp}:${port}  <-- [STREAM FROM 100KM AWAY]`);
+      } else {
+        console.log(`  Tailscale Remote: Offline / Not running (Open Tailscale app to stream remotely)`);
+      }
       if (lan.all.length > 1) {
         console.log(`  Other LAN IPs:    ${lan.all.slice(1).map(ip => `http://${ip}:${port}`).join(', ')}`);
       }
       console.log('============================================================\n');
-      resolve({ server, port, lanIp: lan.primary });
+      resolve({ server, port, lanIp: lan.primary, tailscaleIp });
     });
 
     server.on('error', (err) => {
