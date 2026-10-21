@@ -38,7 +38,9 @@ export default function LecturePlayer({
   const [volume, setVolume] = useState(1.0);
   const [isMuted, setIsMuted] = useState(false);
   const [showUnmuteBtn, setShowUnmuteBtn] = useState(false);
-  const [showRealTimeLeft, setShowRealTimeLeft] = useState(true);
+  const [timeDisplayMode, setTimeDisplayMode] = useState(() => {
+    return localStorage.getItem('courseflix_time_mode') || 'real';
+  });
   const [isHideControls, setIsHideControls] = useState(false);
 
   // Screen Lock Feature
@@ -271,6 +273,18 @@ export default function LecturePlayer({
     }
   }, [availableSubtitles, selectedSubtitle, showToast]);
 
+  // Audio Track / Language Cycling Handler ('l' key / toggle)
+  const cycleAudioTrack = useCallback(() => {
+    if (!availableAudioTracks || availableAudioTracks.length === 0) {
+      showToast?.('Default audio track in use');
+      return;
+    }
+    const curIdx = selectedAudioTrack;
+    const nextIdx = (curIdx + 1) % availableAudioTracks.length;
+    const nextTrack = availableAudioTracks[nextIdx];
+    handleSelectAudioTrack(nextTrack);
+  }, [availableAudioTracks, selectedAudioTrack, handleSelectAudioTrack, showToast]);
+
   // Ensure HTML5 textTrack mode is set to 'showing' so cues render on screen
   useEffect(() => {
     if (!videoRef.current) return;
@@ -318,7 +332,8 @@ export default function LecturePlayer({
       altAudioRef.current.pause();
       altAudioRef.current.src = '';
     }
-    const initialTime = lecture.currentTime || 0;
+    const localResume = parseFloat(localStorage.getItem('courseflix_resume_' + lecture.id) || '0');
+    const initialTime = localResume || lecture.currentTime || 0;
     setCurrentTime(initialTime);
     resumeTimeRef.current = initialTime;
     setDuration(lecture.duration || 0);
@@ -333,12 +348,13 @@ export default function LecturePlayer({
         setBookmarks(prog.bookmarks);
         onUpdateLectureProgress?.(lecture.id, { bookmarks: prog.bookmarks });
       }
-      if (typeof prog.currentTime === 'number') {
+      if (typeof prog.currentTime === 'number' && prog.currentTime > 0) {
         const serverTime = prog.currentTime;
-        resumeTimeRef.current = serverTime;
-        setCurrentTime(serverTime);
-        if (videoRef.current && videoRef.current.readyState >= 1) {
-          if (Math.abs(videoRef.current.currentTime - serverTime) > 1 && serverTime > 0) {
+        // If local resume wasn't set or server time is significantly ahead
+        if (!localResume || Math.abs(serverTime - localResume) > 5) {
+          resumeTimeRef.current = serverTime;
+          setCurrentTime(serverTime);
+          if (videoRef.current && videoRef.current.readyState >= 1) {
             videoRef.current.currentTime = serverTime;
           }
         }
@@ -597,12 +613,14 @@ export default function LecturePlayer({
 
   const handleBackToFolderWithSave = useCallback(() => {
     if (videoRef.current && videoRef.current.currentTime > 0) {
+      const cur = videoRef.current.currentTime;
+      localStorage.setItem('courseflix_resume_' + lecture.id, cur.toString());
       api.updateProgress(lecture.id, {
-        currentTime: videoRef.current.currentTime,
+        currentTime: cur,
         duration: videoRef.current.duration || 0
       }).catch(() => {});
       onUpdateLectureProgress?.(lecture.id, {
-        currentTime: videoRef.current.currentTime
+        currentTime: cur
       });
     }
     onBackToFolder();
@@ -854,10 +872,11 @@ export default function LecturePlayer({
       }
     }
 
-    // Throttled periodic progress saving to server every 2 seconds
+    // Throttled periodic progress saving to server and localStorage every 2 seconds
     const now = Date.now();
     if (now - lastSaveRef.current > 2000 && cur > 0) {
       lastSaveRef.current = now;
+      localStorage.setItem('courseflix_resume_' + lecture.id, cur.toString());
       api.updateProgress(lecture.id, { currentTime: cur, duration: dur }).catch(() => {});
       onUpdateLectureProgress?.(lecture.id, { currentTime: cur, duration: dur });
     }
@@ -964,10 +983,12 @@ export default function LecturePlayer({
     }
 
     // Resume from where left off via native HTML5 seeking
-    const targetTime = resumeTimeRef.current || lecture.currentTime || 0;
+    const localResume = parseFloat(localStorage.getItem('courseflix_resume_' + lecture.id) || '0');
+    const targetTime = localResume || resumeTimeRef.current || lecture.currentTime || 0;
     if (targetTime > 1 && targetTime < (metaDur || 999999) - 3) {
       videoRef.current.currentTime = targetTime;
       setCurrentTime(targetTime);
+      showToast?.(`Resumed at ${formatTime(targetTime)}`);
     }
 
     videoRef.current.play().then(() => {
@@ -1013,6 +1034,40 @@ export default function LecturePlayer({
   const remainingRealTime = Math.max(0, (effectiveDuration - currentTime) / Math.max(0.1, playbackRate));
   const remainingStandardTime = Math.max(0, effectiveDuration - currentTime);
   const timelineProgressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
+
+  // Exact clock time the video will finish based on real remaining time & speed
+  const endsAtDate = new Date(Date.now() + remainingRealTime * 1000);
+  const endsAtClockTime = endsAtDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  const cycleTimeDisplayMode = useCallback(() => {
+    const modes = ['real', 'standard', 'endsAt'];
+    setTimeDisplayMode(prev => {
+      const curIdx = modes.indexOf(prev);
+      const next = modes[(curIdx + 1) % modes.length];
+      localStorage.setItem('courseflix_time_mode', next);
+
+      if (next === 'real') {
+        const approxMins = Math.max(1, Math.round(remainingRealTime / 60));
+        showToast?.(`Real time remaining: ${formatTime(remainingRealTime)} (~${approxMins}m at ${playbackRate}x)`);
+      } else if (next === 'standard') {
+        showToast?.(`Standard video remaining: ${formatTime(remainingStandardTime)} (at 1x pace)`);
+      } else {
+        showToast?.(`Lecture finishes at: ${endsAtClockTime}`);
+      }
+      return next;
+    });
+  }, [remainingRealTime, remainingStandardTime, endsAtClockTime, playbackRate, showToast]);
+
+  const getTimeRemainingLabel = () => {
+    if (timeDisplayMode === 'endsAt') {
+      return `Ends at ${endsAtClockTime}`;
+    }
+    if (timeDisplayMode === 'standard') {
+      return formatTime(remainingStandardTime);
+    }
+    // 'real' mode (scaled by playback speed)
+    return formatTime(remainingRealTime);
+  };
 
   // Brown noise
   const toggleBrownNoise = useCallback(() => {
@@ -1068,19 +1123,30 @@ export default function LecturePlayer({
           seekRelative(-10);
           break;
         case 'ArrowRight':
-        case 'l':
-        case 'L':
           e.preventDefault();
           seekRelative(10);
           break;
-        case 'v':
-        case 'V':
-        case 's':
-        case 'S':
         case 'c':
         case 'C':
           e.preventDefault();
+          changeSpeed(parseFloat((playbackRate + 0.1).toFixed(2)));
+          break;
+        case 'x':
+        case 'X':
+          e.preventDefault();
+          changeSpeed(parseFloat((playbackRate - 0.1).toFixed(2)));
+          break;
+        case 's':
+        case 'S':
+        case 'v':
+        case 'V':
+          e.preventDefault();
           cycleSubtitle();
+          break;
+        case 'l':
+        case 'L':
+          e.preventDefault();
+          cycleAudioTrack();
           break;
         case 'f':
         case 'F':
@@ -1108,7 +1174,7 @@ export default function LecturePlayer({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlayPause, seekRelative, cycleSubtitle, toggleFullscreen, toggleMute, toggleBrownNoise, isLocked]);
+  }, [togglePlayPause, seekRelative, changeSpeed, playbackRate, cycleSubtitle, cycleAudioTrack, toggleFullscreen, toggleMute, toggleBrownNoise, isLocked]);
 
   // Mouse Wheel Scroll on Window to Seek Video Forward and Backward (PotPlayer / VLC style)
   useEffect(() => {
@@ -1367,6 +1433,18 @@ export default function LecturePlayer({
                 <span className="netflix-episode-title">
                   {currentIdx >= 0 ? `S1:E${currentIdx + 1} "${lecture.name}"` : lecture.name}
                 </span>
+                <div
+                  className="netflix-ends-at-badge"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cycleTimeDisplayMode();
+                  }}
+                  title="Click to cycle time display format (Real / Video / Clock Time)"
+                >
+                  <span>Ends at <strong className="ends-at-highlight">{endsAtClockTime}</strong></span>
+                  <span className="ends-at-dot">•</span>
+                  <span>{formatTime(remainingRealTime)} left ({playbackRate}x)</span>
+                </div>
               </div>
 
               <div className="netflix-top-actions">
@@ -1544,15 +1622,13 @@ export default function LecturePlayer({
                   })}
                 </div>
 
-                {/* Remaining Time Display */}
+                {/* Remaining Time Display (NO '--', cycles Real-Time / Standard Video Time / Ends At on click) */}
                 <div
                   className="netflix-time-remaining"
-                  onClick={() => setShowRealTimeLeft(prev => !prev)}
-                  title="Click to toggle time format"
+                  onClick={cycleTimeDisplayMode}
+                  title="Click to toggle time format: Real-Time / Standard Video Time / Ends At"
                 >
-                  {showRealTimeLeft
-                    ? `-${formatTimeRemaining(remainingRealTime)}`
-                    : `-${formatTimeRemaining(remainingStandardTime)}`}
+                  {getTimeRemainingLabel()}
                 </div>
               </div>
 

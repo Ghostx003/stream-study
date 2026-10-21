@@ -44,8 +44,7 @@ export function formatTotalDuration(seconds) {
  * Calculates remaining time for display, formatted as "-MM:SS" or "-HH:MM:SS"
  */
 export function formatTimeRemaining(remainingSeconds) {
-  const formatted = formatTime(remainingSeconds);
-  return `-${formatted}`;
+  return formatTime(remainingSeconds);
 }
 
 /**
