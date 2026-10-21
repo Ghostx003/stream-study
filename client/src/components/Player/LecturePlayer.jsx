@@ -439,11 +439,12 @@ export default function LecturePlayer({
       requestImmersiveFullscreen();
     }
 
-    // If the tap was directly on an interactive button, input, or drawer, do not toggle controls
+    // If the tap was directly on an interactive button, input, drawer, or sidebar, do not toggle controls
     if (
       e?.target?.closest?.('button') ||
       e?.target?.closest?.('input') ||
       e?.target?.closest?.('.netflix-drawer') ||
+      e?.target?.closest?.('.netflix-episodes-sidebar') ||
       e?.target?.closest?.('.unmute-btn') ||
       e?.target?.closest?.('.netflix-unlock-pill-btn')
     ) {
@@ -637,6 +638,15 @@ export default function LecturePlayer({
       return;
     }
 
+    // Do NOT intercept gestures if touch began inside the playlist sidebar or drawers
+    if (
+      e.target.closest('.netflix-episodes-sidebar') ||
+      e.target.closest('.netflix-drawer') ||
+      e.target.closest('.modal-container')
+    ) {
+      return;
+    }
+
     if (e.touches.length >= 2) {
       // 2-finger pinch gesture init - lock out all seeking immediately
       isPinchingRef.current = true;
@@ -679,7 +689,15 @@ export default function LecturePlayer({
   };
 
   const handleTouchMove = (e) => {
-    if (isLocked || !videoWrapperRef.current) return;
+    if (
+      isLocked ||
+      !videoWrapperRef.current ||
+      e.target.closest('.netflix-episodes-sidebar') ||
+      e.target.closest('.netflix-drawer') ||
+      e.target.closest('.modal-container')
+    ) {
+      return;
+    }
 
     // Handle 2-finger pinch gesture (Pinch in -> Fit, Pinch out -> Fill)
     if (e.touches.length >= 2) {
@@ -773,6 +791,14 @@ export default function LecturePlayer({
   const handleTouchEnd = (e) => {
     pinchStartRef.current = null;
     if (isLocked) return;
+
+    if (
+      e.target.closest('.netflix-episodes-sidebar') ||
+      e.target.closest('.netflix-drawer') ||
+      e.target.closest('.modal-container')
+    ) {
+      return;
+    }
 
     if (e && e.touches && e.touches.length >= 1) {
       // Partial lift off during pinch - maintain pinch lockout!
@@ -1185,8 +1211,8 @@ export default function LecturePlayer({
       // Don't intercept if screen is locked
       if (isLocked) return;
 
-      // Don't intercept if scrolling inside a drawer, modal, or episodes list
-      if (e.target && (e.target.closest('.netflix-drawer') || e.target.closest('.modal-container') || e.target.closest('.netflix-episodes-list'))) {
+      // Don't intercept if scrolling inside a sidebar, drawer, modal, or episodes list
+      if (e.target && (e.target.closest('.netflix-episodes-sidebar') || e.target.closest('.netflix-drawer') || e.target.closest('.modal-container') || e.target.closest('.netflix-episodes-list'))) {
         return;
       }
 
@@ -1218,7 +1244,7 @@ export default function LecturePlayer({
   }, [isLocked, seekRelative, resetControlsTimeout, showToast]);
 
   return (
-    <div className={`netflix-player-root sub-size-${subFontSize}`} ref={containerRef}>
+    <div className={`netflix-player-root sub-size-${subFontSize} ${activeDrawer === 'episodes' ? 'sidebar-open' : ''}`} ref={containerRef}>
       {/* Dynamic Subtitle Font Size Override */}
       <style>{`
         ::cue, video::cue {
@@ -1794,59 +1820,6 @@ export default function LecturePlayer({
           </div>
         )}
 
-        {/* 3. Episodes Drawer */}
-        {activeDrawer === 'episodes' && (
-          <div className="netflix-drawer episodes-drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="netflix-drawer-header">
-              <div className="drawer-title">
-                <i className="fas fa-layer-group" style={{ color: '#E50914' }}></i>
-                <span>Episodes & Lectures ({playlist.length})</span>
-              </div>
-              <button className="netflix-drawer-close" onClick={() => setActiveDrawer(null)}>
-                &times;
-              </button>
-            </div>
-
-            <div className="netflix-drawer-content scrollable">
-              {playlist.map((lec, idx) => {
-                const isActive = lec.id === lecture.id;
-                return (
-                  <div
-                    key={lec.id}
-                    className={`netflix-episode-row ${isActive ? 'active' : ''}`}
-                    onClick={() => {
-                      if (!isActive) {
-                        onSelectLecture(lec);
-                        setActiveDrawer(null);
-                      }
-                    }}
-                  >
-                    <div className="episode-index">{idx + 1}</div>
-                    <div className="episode-info">
-                      <div className="episode-title">{lec.name}</div>
-                      <div className="episode-meta">
-                        <span>{formatDuration(lec.duration)}</span>
-                        {lec.completed && (
-                          <span style={{ color: 'var(--accent-primary)', marginLeft: '8px' }}>
-                            <i className="fas fa-check-circle"></i> Completed
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {isActive ? (
-                      <div className="episode-playing-tag">Playing</div>
-                    ) : (
-                      <button className="episode-play-icon">
-                        <i className="fas fa-play"></i>
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* 4. Audio & Subtitles Track Selection Drawer */}
         {activeDrawer === 'audioSub' && (
           <div className="netflix-drawer" onClick={(e) => e.stopPropagation()}>
@@ -2047,6 +2020,80 @@ export default function LecturePlayer({
           </div>
         )}
       </div>
+
+      {/* Right-Hand Side Episode Playlist Sidebar (Sacrifices video space, isolated touch & wheel scroll) */}
+      {activeDrawer === 'episodes' && (
+        <aside
+          className="netflix-episodes-sidebar"
+          onClick={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
+          <div className="netflix-sidebar-header">
+            <div className="sidebar-title">
+              <i className="fas fa-layer-group" style={{ color: '#E50914' }}></i>
+              <span>Episodes & Lectures</span>
+              <span className="sidebar-count">({playlist.length})</span>
+            </div>
+            <button
+              className="netflix-sidebar-close-btn"
+              onClick={() => setActiveDrawer(null)}
+              title="Close Playlist"
+            >
+              &times;
+            </button>
+          </div>
+
+          <div
+            className="netflix-sidebar-content scrollable"
+            onWheel={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            {playlist.map((lec, idx) => {
+              const isActive = lec.id === lecture.id;
+              return (
+                <div
+                  key={lec.id}
+                  className={`netflix-sidebar-episode-row ${isActive ? 'active' : ''}`}
+                  onClick={() => {
+                    if (!isActive) {
+                      onSelectLecture(lec);
+                    }
+                  }}
+                >
+                  <div className="sidebar-episode-idx">{idx + 1}</div>
+                  <div className="sidebar-episode-info">
+                    <div className="sidebar-episode-title">{lec.name}</div>
+                    <div className="sidebar-episode-meta">
+                      <span>{formatDuration(lec.duration)}</span>
+                      {lec.completed && (
+                        <span className="sidebar-episode-completed">
+                          <i className="fas fa-check-circle"></i> Completed
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {isActive ? (
+                    <div className="sidebar-playing-badge" title="Playing">
+                      <span className="eq-bar"></span>
+                      <span className="eq-bar"></span>
+                      <span className="eq-bar"></span>
+                    </div>
+                  ) : (
+                    <button className="sidebar-play-btn" title="Play">
+                      <i className="fas fa-play"></i>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </aside>
+      )}
 
       {/* Keyboard Shortcuts Modal */}
       <ShortcutsModal

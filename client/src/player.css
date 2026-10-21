@@ -19,7 +19,7 @@
   z-index: 99999;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
@@ -28,6 +28,7 @@
 
 .netflix-video-viewport {
   position: relative;
+  flex: 1 1 auto;
   width: 100%;
   height: 100%;
   display: flex;
@@ -35,6 +36,26 @@
   justify-content: center;
   background-color: #000;
   overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.netflix-player-root.sidebar-open .netflix-video-viewport {
+  width: calc(100% - 360px);
+  max-width: calc(100% - 360px);
+}
+
+@media (max-width: 1024px) {
+  .netflix-player-root.sidebar-open .netflix-video-viewport {
+    width: calc(100% - 300px);
+    max-width: calc(100% - 300px);
+  }
+}
+
+@media (max-width: 720px) {
+  .netflix-player-root.sidebar-open .netflix-video-viewport {
+    width: calc(100% - 250px);
+    max-width: calc(100% - 250px);
+  }
 }
 
 .netflix-video-element {
@@ -908,6 +929,235 @@ video::-webkit-media-text-track-container {
   font-size: 0.85rem;
   padding: 6px;
   cursor: pointer;
+}
+
+/* ==========================================================================
+   RIGHT-HAND SIDE EPISODES PLAYLIST SIDEBAR
+   ========================================================================== */
+
+.netflix-episodes-sidebar {
+  position: relative;
+  width: 360px;
+  min-width: 360px;
+  height: 100%;
+  background: rgba(16, 16, 16, 0.98);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.85);
+  animation: sidebarSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+@keyframes sidebarSlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.netflix-sidebar-header {
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(22, 22, 22, 0.95);
+  flex-shrink: 0;
+}
+
+.netflix-sidebar-header .sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+}
+
+.netflix-sidebar-header .sidebar-count {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.netflix-sidebar-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #d1d5db;
+  font-size: 1.5rem;
+  line-height: 1;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+}
+
+.netflix-sidebar-close-btn:hover {
+  background: rgba(229, 9, 20, 0.2);
+  border-color: #E50914;
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+.netflix-sidebar-content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 14px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.netflix-sidebar-episode-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.netflix-sidebar-episode-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateX(-2px);
+}
+
+.netflix-sidebar-episode-row.active {
+  background: rgba(229, 9, 20, 0.15);
+  border-color: #E50914;
+  box-shadow: 0 0 16px rgba(229, 9, 20, 0.25);
+}
+
+.sidebar-episode-idx {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #6b7280;
+  min-width: 24px;
+  text-align: center;
+}
+
+.netflix-sidebar-episode-row.active .sidebar-episode-idx {
+  color: #E50914;
+}
+
+.sidebar-episode-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-episode-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #f3f4f6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.netflix-sidebar-episode-row.active .sidebar-episode-title {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.sidebar-episode-meta {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-episode-completed {
+  color: #E50914;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-play-btn {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 6px;
+  opacity: 0;
+  transition: all 0.18s ease;
+}
+
+.netflix-sidebar-episode-row:hover .sidebar-play-btn {
+  opacity: 1;
+  color: #ffffff;
+}
+
+/* Equalizer Bars Animation for Currently Playing Episode */
+.sidebar-playing-badge {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+  padding: 0 4px;
+}
+
+.sidebar-playing-badge .eq-bar {
+  width: 3px;
+  background: #E50914;
+  border-radius: 1px;
+  animation: eqPulse 0.8s ease-in-out infinite alternate;
+}
+
+.sidebar-playing-badge .eq-bar:nth-child(1) {
+  height: 60%;
+  animation-delay: 0.1s;
+}
+
+.sidebar-playing-badge .eq-bar:nth-child(2) {
+  height: 100%;
+  animation-delay: 0.3s;
+}
+
+.sidebar-playing-badge .eq-bar:nth-child(3) {
+  height: 40%;
+  animation-delay: 0.2s;
+}
+
+@keyframes eqPulse {
+  0% { transform: scaleY(0.3); }
+  100% { transform: scaleY(1); }
+}
+
+@media (max-width: 1024px) {
+  .netflix-episodes-sidebar {
+    width: 300px;
+    min-width: 300px;
+  }
+}
+
+@media (max-width: 720px) {
+  .netflix-episodes-sidebar {
+    width: 250px;
+    min-width: 250px;
+  }
 }
 
 /* Episodes List */
