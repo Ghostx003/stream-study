@@ -101,9 +101,9 @@ export default function LecturePlayer({
       const el = containerRef.current || document.documentElement;
       if (!document.fullscreenElement && !document.webkitFullscreenElement) {
         if (el.requestFullscreen) {
-          await el.requestFullscreen({ navigationUI: 'hide' });
+          await el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
         } else if (el.webkitRequestFullscreen) {
-          await el.webkitRequestFullscreen();
+          await el.webkitRequestFullscreen().catch(() => {});
         }
       }
       if (window.screen?.orientation?.lock) {
@@ -207,6 +207,8 @@ export default function LecturePlayer({
       videoRef.current.muted = isMuted;
       videoRef.current.volume = volume;
       if (altAudioRef.current) {
+        altAudioRef.current.oncanplay = null;
+        altAudioRef.current.onerror = null;
         altAudioRef.current.pause();
         altAudioRef.current.removeAttribute('src');
         altAudioRef.current.load();
@@ -217,13 +219,19 @@ export default function LecturePlayer({
         const audioEl = altAudioRef.current;
         const audioUrl = `/api/audio/track?key=${encodeURIComponent(lecture.id)}&streamIndex=${at.streamIndex}`;
 
+        audioEl.oncanplay = null;
+        audioEl.onerror = null;
+
         audioEl.pause();
         audioEl.src = audioUrl;
         audioEl.volume = volume;
         audioEl.muted = isMuted;
         audioEl.playbackRate = videoRef.current.playbackRate || playbackRate;
 
+        let hasStarted = false;
         const syncAndPlay = () => {
+          if (hasStarted) return;
+          hasStarted = true;
           try {
             audioEl.currentTime = videoRef.current ? videoRef.current.currentTime : curTime;
           } catch (e) {
@@ -232,18 +240,20 @@ export default function LecturePlayer({
           if (videoRef.current) {
             videoRef.current.muted = true;
           }
-          if (isCurrentlyPlaying) {
+          if (isCurrentlyPlaying && !videoRef.current?.paused) {
             audioEl.play().catch((err) => {
-              console.warn('Alternate audio play failed:', err);
+              if (err.name !== 'AbortError') {
+                console.warn('Alternate audio play failed:', err);
+              }
             });
           }
         };
 
-        audioEl.onloadedmetadata = syncAndPlay;
         audioEl.oncanplay = syncAndPlay;
 
         audioEl.onerror = () => {
-          console.error('Alternate audio error, falling back to primary track');
+          if (!audioEl.src || audioEl.src.endsWith('/')) return;
+          console.error('Alternate audio error, falling back to primary track:', audioEl.error);
           if (videoRef.current) {
             videoRef.current.muted = isMuted;
           }
@@ -252,9 +262,6 @@ export default function LecturePlayer({
         };
 
         audioEl.load();
-        if (isCurrentlyPlaying) {
-          audioEl.play().catch(() => {});
-        }
       }
     }
   }, [lecture.id, isMuted, volume, playbackRate, showToast]);

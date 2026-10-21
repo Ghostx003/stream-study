@@ -17,7 +17,9 @@ const MIME_MAP = {
   '.m4a': 'audio/mp4',
   '.aac': 'audio/aac',
   '.mp3': 'audio/mpeg',
-  '.ogg': 'audio/ogg'
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg; codecs=opus',
+  '.flac': 'audio/flac'
 };
 
 /**
@@ -25,6 +27,9 @@ const MIME_MAP = {
  */
 export function getMimeType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.webm' && filePath.includes('cache') && filePath.includes('audio')) {
+    return 'audio/webm';
+  }
   return MIME_MAP[ext] || 'application/octet-stream';
 }
 
@@ -169,8 +174,26 @@ if (!fs.existsSync(audioCacheDir)) {
 
 const audioInFlight = new Map();
 
+function getAudioFormatForCodec(codec) {
+  const c = (codec || '').trim().toLowerCase();
+  if (c === 'aac') return { ext: '.m4a', copy: true, format: 'mp4' };
+  if (c === 'mp3') return { ext: '.mp3', copy: true, format: 'mp3' };
+  if (c === 'opus') return { ext: '.webm', copy: true, format: 'webm' };
+  if (c === 'vorbis') return { ext: '.webm', copy: true, format: 'webm' };
+  if (c === 'flac') return { ext: '.flac', copy: true, format: 'flac' };
+  // Non-native browser audio (ac3, eac3, dts, truehd): transcode to AAC in MP4
+  return { ext: '.m4a', copy: false, format: 'mp4' };
+}
+
+function findExistingAudioCache(hash) {
+  if (!fs.existsSync(audioCacheDir)) return null;
+  const files = fs.readdirSync(audioCacheDir);
+  const found = files.find(f => f.startsWith(hash) && !f.includes('.tmp'));
+  return found ? path.join(audioCacheDir, found) : null;
+}
+
 /**
- * Serves an extracted individual audio track from a media file with HTTP 206 byte-ranges.
+ * Asynchronously extracts or copies an individual audio track in the background.
  */
 export function prewarmAudioTrack(filePath, streamIndex, knownCodec) {
   if (!fs.existsSync(filePath)) return Promise.reject(new Error('File not found'));
@@ -179,21 +202,21 @@ export function prewarmAudioTrack(filePath, streamIndex, knownCodec) {
 
   const stat = fs.statSync(filePath);
   const hash = crypto.createHash('md5').update(`${filePath}::${stat.size}::${stat.mtimeMs}::${sIdx}`).digest('hex');
-  const cachedFilePath = path.join(audioCacheDir, `${hash}.m4a`);
 
-  if (fs.existsSync(cachedFilePath)) {
-    return Promise.resolve(cachedFilePath);
+  const existing = findExistingAudioCache(hash);
+  if (existing) {
+    return Promise.resolve(existing);
   }
 
-  if (audioInFlight.has(cachedFilePath)) {
-    return audioInFlight.get(cachedFilePath);
+  if (audioInFlight.has(hash)) {
+    return audioInFlight.get(hash);
   }
 
   const extractionPromise = new Promise((resolve, reject) => {
     const doExtraction = (codec) => {
-      const lower = (codec || '').trim().toLowerCase();
-      const canCopy = lower === 'aac' || lower === 'mp3';
-      const tempFile = `${cachedFilePath}.tmp_${Date.now()}`;
+      const fmt = getAudioFormatForCodec(codec);
+      const targetFilePath = path.join(audioCacheDir, `${hash}${fmt.ext}`);
+      const tempFile = `${targetFilePath}.tmp_${Date.now()}`;
 
       const runFfmpeg = (tryCopy) => {
         const args = [
@@ -201,11 +224,10 @@ export function prewarmAudioTrack(filePath, streamIndex, knownCodec) {
           '-threads', '0',
           '-i', filePath,
           '-map', `0:${sIdx}`,
-          '-c:a', tryCopy ? 'copy' : 'aac',
-          ...(tryCopy ? [] : ['-b:a', '192k', '-ac', '2']),
-          '-vn',
-          '-f', 'mp4',
-          '-movflags', '+faststart',
+          '-vn', '-sn', '-dn',
+          ...(tryCopy ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']),
+          '-f', fmt.format,
+          ...(fmt.format === 'mp4' ? ['-movflags', '+faststart'] : []),
           tempFile,
           '-y'
         ];
@@ -213,6 +235,7 @@ export function prewarmAudioTrack(filePath, streamIndex, knownCodec) {
         execFile('ffmpeg', args, { timeout: 120000 }, (ffErr) => {
           if (ffErr) {
             if (tryCopy) {
+              // Fallback to transcoding to aac in mp4 if copy failed
               return runFfmpeg(false);
             }
             try { fs.unlinkSync(tempFile); } catch {}
@@ -220,15 +243,15 @@ export function prewarmAudioTrack(filePath, streamIndex, knownCodec) {
           }
 
           try {
-            fs.renameSync(tempFile, cachedFilePath);
+            fs.renameSync(tempFile, targetFilePath);
           } catch (renameErr) {
             // Already renamed by concurrent process
           }
-          resolve(cachedFilePath);
+          resolve(targetFilePath);
         });
       };
 
-      runFfmpeg(canCopy);
+      runFfmpeg(fmt.copy);
     };
 
     if (knownCodec) {
@@ -246,11 +269,11 @@ export function prewarmAudioTrack(filePath, streamIndex, knownCodec) {
     }
   });
 
-  audioInFlight.set(cachedFilePath, extractionPromise);
+  audioInFlight.set(hash, extractionPromise);
 
   extractionPromise
     .finally(() => {
-      audioInFlight.delete(cachedFilePath);
+      audioInFlight.delete(hash);
     });
 
   return extractionPromise;
@@ -268,11 +291,10 @@ export function serveAudioTrack(req, res, filePath, streamIndex) {
 
   const stat = fs.statSync(filePath);
   const hash = crypto.createHash('md5').update(`${filePath}::${stat.size}::${stat.mtimeMs}::${sIdx}`).digest('hex');
-  const cachedFilePath = path.join(audioCacheDir, `${hash}.m4a`);
 
-  // If already extracted, stream directly with HTTP 206 byte-ranges
-  if (fs.existsSync(cachedFilePath)) {
-    return streamVideoFile(req, res, cachedFilePath);
+  const existing = findExistingAudioCache(hash);
+  if (existing) {
+    return streamVideoFile(req, res, existing);
   }
 
   prewarmAudioTrack(filePath, sIdx)
