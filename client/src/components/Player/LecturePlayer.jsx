@@ -20,6 +20,8 @@ export default function LecturePlayer({
   const containerRef = useRef(null);
   const videoWrapperRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
+  const singleTapTimerRef = useRef(null);
+  const touchHandledRef = useRef(false);
   const resumeTimeRef = useRef(lecture.currentTime || 0);
   const lastSaveRef = useRef(0);
 
@@ -195,7 +197,7 @@ export default function LecturePlayer({
     };
   }, [lecture.id]);
 
-  // Controls auto-hide on inactivity
+  // Controls auto-hide after 2.5s of inactivity
   const resetControlsTimeout = useCallback(() => {
     if (isLocked) return;
     setIsHideControls(false);
@@ -204,8 +206,56 @@ export default function LecturePlayer({
       if (videoRef.current && !videoRef.current.paused && !activeDrawer) {
         setIsHideControls(true);
       }
-    }, 4000);
+    }, 2500); // Auto-hide after 2.5s of no interaction
   }, [isLocked, activeDrawer]);
+
+  // Master tap/click handler for viewport and screen
+  const handleViewportTap = useCallback((e) => {
+    // If the tap was directly on an interactive button, input, or drawer, do not toggle controls
+    if (
+      e?.target?.closest?.('button') ||
+      e?.target?.closest?.('input') ||
+      e?.target?.closest?.('.netflix-drawer') ||
+      e?.target?.closest?.('.unmute-btn') ||
+      e?.target?.closest?.('.netflix-unlock-pill-btn')
+    ) {
+      resetControlsTimeout();
+      return;
+    }
+
+    if (isLocked) {
+      setShowUnlockPrompt(true);
+      if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
+      unlockTimeoutRef.current = setTimeout(() => setShowUnlockPrompt(false), 2500);
+      return;
+    }
+
+    if (activeDrawer) {
+      setActiveDrawer(null);
+      resetControlsTimeout();
+      return;
+    }
+
+    // Toggle controls visibility:
+    // If hidden -> show controls & start 2.5s auto-hide timer
+    // If visible -> immediately hide controls
+    setIsHideControls((prev) => {
+      const willHide = !prev;
+      if (!willHide) {
+        // Just shown -> start 2.5s timer
+        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = setTimeout(() => {
+          if (videoRef.current && !videoRef.current.paused && !activeDrawer) {
+            setIsHideControls(true);
+          }
+        }, 2500);
+      } else {
+        // Just hidden -> clear timer
+        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      }
+      return willHide;
+    });
+  }, [isLocked, activeDrawer, resetControlsTimeout]);
 
   // Play / Pause toggle
   const togglePlayPause = useCallback(() => {
@@ -494,17 +544,23 @@ export default function LecturePlayer({
     }
 
     // Double-tap seek or single-tap controls toggle
-    if (!start.moved && Date.now() - start.time < 350 && videoWrapperRef.current) {
+    if (!start.moved && Date.now() - start.time < 300 && videoWrapperRef.current) {
       const now = Date.now();
       const lastTap = lastTapRef.current;
       const rect = videoWrapperRef.current.getBoundingClientRect();
       const tapX = start.x - rect.left;
 
-      if (now - lastTap.time < 350 && Math.abs(start.x - lastTap.x) < 50) {
-        // Double tap!
-        if (tapX < rect.width * 0.4) {
+      touchHandledRef.current = true;
+
+      if (now - lastTap.time < 280 && Math.abs(start.x - lastTap.x) < 50) {
+        // Double tap on edges -> 10s seek
+        if (singleTapTimerRef.current) {
+          clearTimeout(singleTapTimerRef.current);
+          singleTapTimerRef.current = null;
+        }
+        if (tapX < rect.width * 0.35) {
           seekRelative(-10);
-        } else if (tapX > rect.width * 0.6) {
+        } else if (tapX > rect.width * 0.65) {
           seekRelative(10);
         } else {
           togglePlayPause();
@@ -512,12 +568,17 @@ export default function LecturePlayer({
         lastTapRef.current = { time: 0, x: 0 };
       } else {
         lastTapRef.current = { time: now, x: start.x };
-        // Single tap toggle controls
-        setTimeout(() => {
-          if (Date.now() - lastTapRef.current.time >= 350 && lastTapRef.current.time !== 0) {
-            setIsHideControls(prev => !prev);
-          }
-        }, 360);
+        if (isHideControls) {
+          // If controls are hidden: instant reveal with 0ms delay!
+          handleViewportTap(e);
+        } else {
+          // If controls are visible: short 180ms delay to check for double tap before hiding
+          if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
+          singleTapTimerRef.current = setTimeout(() => {
+            handleViewportTap(e);
+            singleTapTimerRef.current = null;
+          }, 180);
+        }
       }
     }
   };
@@ -674,20 +735,11 @@ export default function LecturePlayer({
         onMouseMove={resetControlsTimeout}
         onMouseEnter={resetControlsTimeout}
         onClick={(e) => {
-          if (e.target.closest('.netflix-controls-layer') || e.target.closest('.netflix-drawer') || e.target.closest('.unmute-btn')) {
+          if (touchHandledRef.current) {
+            touchHandledRef.current = false;
             return;
           }
-          if (isLocked) {
-            setShowUnlockPrompt(true);
-            if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
-            unlockTimeoutRef.current = setTimeout(() => setShowUnlockPrompt(false), 3000);
-            return;
-          }
-          if (activeDrawer) {
-            setActiveDrawer(null);
-            return;
-          }
-          setIsHideControls(prev => !prev);
+          handleViewportTap(e);
         }}
       >
         {/* Video Element with CSS Brightness & Aspect Ratio filter */}
@@ -832,7 +884,7 @@ export default function LecturePlayer({
             NETFLIX CONTROLS OVERLAY LAYER
            ========================================== */}
         {!isLocked && (
-          <div className="netflix-controls-layer" onClick={(e) => e.stopPropagation()}>
+          <div className="netflix-controls-layer" onClick={handleViewportTap}>
             {/* Top Bar: Back, Title, Cast, Lock */}
             <div className="netflix-top-bar">
               <button

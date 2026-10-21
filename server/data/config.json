@@ -4,16 +4,21 @@
       "id": "root_1792575242475_xs78y",
       "path": "F:\\GATE LECTURES",
       "label": "GATE LECTURES"
+    },
+    {
+      "id": "root_1792596494079_v0zpr",
+      "path": "F:\\7. ANIME",
+      "label": "7. ANIME"
     }
   ],
-  "activeRootId": "root_1792575242475_xs78y",
+  "activeRootId": "root_1792596494079_v0zpr",
   "lectureProgress": {
     "lec_1": {
       "completed": false,
       "currentTime": 0,
       "duration": 2700,
       "bookmarks": [],
-      "lastWatched": "2026-10-21T15:16:01.551Z"
+      "lastWatched": "2026-10-21T14:19:10.747Z"
     },
     "test_lecture_bm": {
       "completed": false,
@@ -23,7 +28,7 @@
         45.2,
         350.8
       ],
-      "lastWatched": "2026-10-21T15:16:01.578Z"
+      "lastWatched": "2026-10-21T14:19:10.754Z"
     },
     "root_1792573165657_f06ok::Overview.mp4": {
       "completed": false,
@@ -55,10 +60,10 @@
     },
     "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/23. Linear Search part 1.mp4": {
       "completed": false,
-      "currentTime": 1453.2,
-      "duration": 3749,
+      "currentTime": 1736,
+      "duration": 3748,
       "bookmarks": [],
-      "lastWatched": "2026-10-21T15:01:50.480Z"
+      "lastWatched": "2026-10-21T15:24:28.149Z"
     },
     "root_1792575242475_xs78y::ALGORITHM/AMIT SIR/CHAPTER 2 SORTING/24. Linear Search part 2.mp4": {
       "completed": false,
