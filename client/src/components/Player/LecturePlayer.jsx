@@ -167,6 +167,51 @@ export default function LecturePlayer({
     onUpdateLectureProgress?.(lecture.id, { currentTime: clamped });
   }, [duration, lecture.id, onUpdateLectureProgress]);
 
+  // Subtitle Cycling Handler (Off -> Sub 1 -> Sub 2 -> ... -> Off)
+  const cycleSubtitle = useCallback(() => {
+    if (!availableSubtitles || availableSubtitles.length === 0) {
+      showToast?.('No subtitles found in this file');
+      return;
+    }
+
+    const list = [null, ...availableSubtitles];
+    const currentIndex = selectedSubtitle
+      ? list.findIndex(s => s && s.id === selectedSubtitle.id)
+      : 0;
+
+    const nextIndex = (currentIndex + 1) % list.length;
+    const nextSub = list[nextIndex];
+    setSelectedSubtitle(nextSub);
+    if (nextSub) {
+      localStorage.setItem('courseflix_subtitles', nextSub.id);
+      showToast?.(`Subtitles: ${nextSub.label}`);
+    } else {
+      localStorage.setItem('courseflix_subtitles', 'off');
+      showToast?.('Subtitles: OFF');
+    }
+  }, [availableSubtitles, selectedSubtitle, showToast]);
+
+  // Ensure HTML5 textTrack mode is set to 'showing' so cues render on screen
+  useEffect(() => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const activate = () => {
+      if (video.textTracks && video.textTracks.length > 0) {
+        for (let i = 0; i < video.textTracks.length; i++) {
+          const t = video.textTracks[i];
+          if (selectedSubtitle) {
+            t.mode = 'showing';
+          } else {
+            t.mode = 'disabled';
+          }
+        }
+      }
+    };
+    activate();
+    const t = setTimeout(activate, 100);
+    return () => clearTimeout(t);
+  }, [selectedSubtitle]);
+
   // Direct native stream URL without conversion
   const streamUrl = api.getVideoStreamUrl(lecture.id);
 
@@ -207,9 +252,7 @@ export default function LecturePlayer({
         const serverTime = prog.currentTime;
         resumeTimeRef.current = serverTime;
         setCurrentTime(serverTime);
-        if (isMkv) {
-          streamStartTimeRef.current = serverTime;
-        } else if (videoRef.current && videoRef.current.readyState >= 1) {
+        if (videoRef.current && videoRef.current.readyState >= 1) {
           if (Math.abs(videoRef.current.currentTime - serverTime) > 1 && serverTime > 0) {
             videoRef.current.currentTime = serverTime;
           }
@@ -222,16 +265,25 @@ export default function LecturePlayer({
       if (!isMounted || !info) return;
       if (info.audioTracks && info.audioTracks.length > 0) {
         setAvailableAudioTracks(info.audioTracks);
-        // Default to first audio track (prefer AAC for instant browser decode if available)
-        const aacTrack = info.audioTracks.find(a => a.codec?.toLowerCase() === 'aac') || info.audioTracks[0];
-        setSelectedAudioTrack(aacTrack.index);
-        selectedAudioStreamIndexRef.current = aacTrack.streamIndex;
+        setSelectedAudioTrack(0);
       }
       if (info.subtitles && info.subtitles.length > 0) {
-        setAvailableSubtitles(prev => {
-          const folderSubs = lecture.subtitles || [];
-          return [...info.subtitles, ...folderSubs];
-        });
+        const folderSubs = lecture.subtitles || [];
+        const combined = [...info.subtitles, ...folderSubs];
+        setAvailableSubtitles(combined);
+        // Automatically activate first English or default subtitle if not explicitly turned off
+        const savedSubPref = localStorage.getItem('courseflix_subtitles');
+        if (savedSubPref !== 'off') {
+          const defaultSub = combined.find(s => (s.srclang || '').toLowerCase().startsWith('en')) || combined[0];
+          setSelectedSubtitle(defaultSub);
+        }
+      } else if (lecture.subtitles && lecture.subtitles.length > 0) {
+        setAvailableSubtitles(lecture.subtitles);
+        const savedSubPref = localStorage.getItem('courseflix_subtitles');
+        if (savedSubPref !== 'off') {
+          const defaultSub = lecture.subtitles.find(s => (s.srclang || '').toLowerCase().startsWith('en')) || lecture.subtitles[0];
+          setSelectedSubtitle(defaultSub);
+        }
       }
       if (info.duration && !duration) {
         setDuration(info.duration);
@@ -784,7 +836,7 @@ export default function LecturePlayer({
   const timelineProgressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
 
   // Brown noise
-  const toggleBrownNoise = () => {
+  const toggleBrownNoise = useCallback(() => {
     if (!brownNoiseRef.current) return;
     if (brownNoiseActive) {
       brownNoiseRef.current.pause();
@@ -799,7 +851,80 @@ export default function LecturePlayer({
         showToast?.('Could not start brown noise', true);
       });
     }
-  };
+  }, [brownNoiseActive, brownNoiseVolume, showToast]);
+
+  // Mute / Unmute
+  const toggleMute = useCallback(() => {
+    if (!videoRef.current) return;
+    const nextMuted = !videoRef.current.muted;
+    videoRef.current.muted = nextMuted;
+    setIsMuted(nextMuted);
+    setShowUnmuteBtn(false);
+    showToast?.(nextMuted ? 'Muted' : 'Unmuted');
+  }, [showToast]);
+
+  // Global Keyboard Shortcuts (Space, Left/Right, V/S for Subtitles, F for Fullscreen, M for Mute, B for Brown Noise)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't intercept if user is typing in an input, textarea or select
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) return;
+      if (isLocked) return;
+
+      switch (e.key) {
+        case ' ':
+        case 'k':
+        case 'K':
+          e.preventDefault();
+          togglePlayPause();
+          break;
+        case 'ArrowLeft':
+        case 'j':
+        case 'J':
+          e.preventDefault();
+          seekRelative(-10);
+          break;
+        case 'ArrowRight':
+        case 'l':
+        case 'L':
+          e.preventDefault();
+          seekRelative(10);
+          break;
+        case 'v':
+        case 'V':
+        case 's':
+        case 'S':
+        case 'c':
+        case 'C':
+          e.preventDefault();
+          cycleSubtitle();
+          break;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'm':
+        case 'M':
+          e.preventDefault();
+          toggleMute();
+          break;
+        case 'b':
+        case 'B':
+          e.preventDefault();
+          toggleBrownNoise();
+          break;
+        case '?':
+          e.preventDefault();
+          setShowShortcutsModal(prev => !prev);
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePlayPause, seekRelative, cycleSubtitle, toggleFullscreen, toggleMute, toggleBrownNoise, isLocked]);
 
   return (
     <div className="netflix-player-root" ref={containerRef}>
@@ -859,6 +984,13 @@ export default function LecturePlayer({
               srcLang={selectedSubtitle.srclang || 'en'}
               label={selectedSubtitle.label}
               default
+              onLoad={() => {
+                if (videoRef.current && videoRef.current.textTracks) {
+                  for (let i = 0; i < videoRef.current.textTracks.length; i++) {
+                    videoRef.current.textTracks[i].mode = 'showing';
+                  }
+                }
+              }}
             />
           )}
         </video>
@@ -991,6 +1123,21 @@ export default function LecturePlayer({
               </div>
 
               <div className="netflix-top-actions">
+                {/* CC / Subtitles Quick Cycle Button */}
+                <button
+                  className={`netflix-top-btn ${selectedSubtitle ? 'active-sub' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cycleSubtitle();
+                  }}
+                  title={selectedSubtitle ? `Subtitles: ${selectedSubtitle.label} (Tap to cycle)` : 'Subtitles: Off (Tap to cycle)'}
+                  style={{ color: selectedSubtitle ? '#E50914' : 'rgba(255, 255, 255, 0.85)' }}
+                >
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    <path d="M19 4H5c-1.11 0-2 .9-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6a2 2 0 0 0-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/>
+                  </svg>
+                </button>
+
                 {/* Brown Noise */}
                 <button
                   className="netflix-top-btn"
@@ -1422,6 +1569,7 @@ export default function LecturePlayer({
                       className={`column-option-row ${selectedSubtitle === null ? 'selected' : ''}`}
                       onClick={() => {
                         setSelectedSubtitle(null);
+                        localStorage.setItem('courseflix_subtitles', 'off');
                         showToast?.('Subtitles: OFF');
                       }}
                     >
@@ -1429,24 +1577,40 @@ export default function LecturePlayer({
                       {selectedSubtitle === null && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
                     </div>
 
-                    {/* Detected Subtitle files from folder */}
+                    {/* Detected Subtitle files (embedded & external) */}
                     {availableSubtitles.map((sub) => (
                       <div
                         key={sub.id}
                         className={`column-option-row ${selectedSubtitle?.id === sub.id ? 'selected' : ''}`}
                         onClick={() => {
                           setSelectedSubtitle(sub);
+                          localStorage.setItem('courseflix_subtitles', sub.id);
                           showToast?.(`Subtitles: ${sub.label}`);
                         }}
                       >
-                        <span>{sub.label}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{sub.label}</span>
+                          {sub.isEmbedded && (
+                            <span style={{
+                              fontSize: '0.62rem',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              background: 'rgba(229, 9, 20, 0.2)',
+                              color: '#ff6b6b',
+                              border: '1px solid rgba(229, 9, 20, 0.4)',
+                              fontWeight: '600'
+                            }}>
+                              EMBEDDED
+                            </span>
+                          )}
+                        </div>
                         {selectedSubtitle?.id === sub.id && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
                       </div>
                     ))}
 
                     {availableSubtitles.length === 0 && (
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: '8px 0' }}>
-                        No external subtitle files (.srt/.vtt) found in this folder.
+                        No subtitles available in this file or folder.
                       </div>
                     )}
                   </div>

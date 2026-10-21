@@ -89,6 +89,8 @@ export function serveSubtitleFile(req, res, filePath) {
   res.end(vttContent);
 }
 
+const subtitleVttCache = new Map();
+
 /**
  * Extracts embedded subtitles from a video file (e.g. MKV) and streams as WebVTT.
  */
@@ -100,6 +102,16 @@ export function serveEmbeddedSubtitle(req, res, filePath, streamIndex) {
   const sIdx = parseInt(streamIndex, 10);
   if (isNaN(sIdx) || sIdx < 0) {
     return res.status(400).send('Invalid stream index');
+  }
+
+  const cacheKey = `${filePath}::${sIdx}`;
+  if (subtitleVttCache.has(cacheKey)) {
+    res.writeHead(200, {
+      'Content-Type': 'text/vtt; charset=utf-8',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=86400'
+    });
+    return res.end(subtitleVttCache.get(cacheKey));
   }
 
   res.writeHead(200, {
@@ -116,7 +128,18 @@ export function serveEmbeddedSubtitle(req, res, filePath, streamIndex) {
     '-'
   ], { stdio: ['ignore', 'pipe', 'ignore'] });
 
+  let buffer = '';
+  ff.stdout.on('data', chunk => {
+    buffer += chunk.toString();
+  });
+
   ff.stdout.pipe(res);
+
+  ff.on('close', code => {
+    if (code === 0 && buffer) {
+      subtitleVttCache.set(cacheKey, buffer);
+    }
+  });
 
   req.on('close', () => {
     try {

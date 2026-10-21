@@ -69,6 +69,10 @@ export default function ShortcutsModal({ isOpen, onClose }) {
                   <kbd style={kbdStyle}>M</kbd>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Cycle Subtitles</span>
+                  <div style={{ display: 'flex', gap: '4px' }}><kbd style={kbdStyle}>V</kbd> / <kbd style={kbdStyle}>S</kbd></div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Brown Noise Background</span>
                   <kbd style={kbdStyle}>B</kbd>
                 </div>
