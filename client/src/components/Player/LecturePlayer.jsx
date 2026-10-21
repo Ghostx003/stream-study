@@ -39,7 +39,8 @@ export default function LecturePlayer({
   const [isMuted, setIsMuted] = useState(false);
   const [showUnmuteBtn, setShowUnmuteBtn] = useState(false);
   const [timeDisplayMode, setTimeDisplayMode] = useState(() => {
-    return localStorage.getItem('courseflix_time_mode') || 'real';
+    const saved = localStorage.getItem('courseflix_time_mode');
+    return saved === 'standard' ? 'standard' : 'real';
   });
   const [isHideControls, setIsHideControls] = useState(false);
 
@@ -205,7 +206,6 @@ export default function LecturePlayer({
       }
     } else {
       // Switch to secondary audio track via synchronized audio element
-      videoRef.current.muted = true;
       if (altAudioRef.current) {
         const audioEl = altAudioRef.current;
         const audioUrl = `/api/audio/track?key=${encodeURIComponent(lecture.id)}&streamIndex=${at.streamIndex}`;
@@ -221,6 +221,9 @@ export default function LecturePlayer({
             audioEl.currentTime = videoRef.current ? videoRef.current.currentTime : curTime;
           } catch (e) {
             console.warn('Could not set currentTime on alt audio:', e);
+          }
+          if (videoRef.current) {
+            videoRef.current.muted = true;
           }
           if (isCurrentlyPlaying) {
             audioEl.play().catch((err) => {
@@ -1066,7 +1069,7 @@ export default function LecturePlayer({
   const endsAtClockTime = endsAtDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
 
   const cycleTimeDisplayMode = useCallback(() => {
-    const modes = ['real', 'standard', 'endsAt'];
+    const modes = ['real', 'standard'];
     setTimeDisplayMode(prev => {
       const curIdx = modes.indexOf(prev);
       const next = modes[(curIdx + 1) % modes.length];
@@ -1074,20 +1077,15 @@ export default function LecturePlayer({
 
       if (next === 'real') {
         const approxMins = Math.max(1, Math.round(remainingRealTime / 60));
-        showToast?.(`Real time remaining: ${formatTime(remainingRealTime)} (~${approxMins}m at ${playbackRate}x)`);
-      } else if (next === 'standard') {
-        showToast?.(`Standard video remaining: ${formatTime(remainingStandardTime)} (at 1x pace)`);
+        showToast?.(`Speed-adjusted remaining: ${formatTime(remainingRealTime)} (~${approxMins}m at ${playbackRate}x)`);
       } else {
-        showToast?.(`Lecture finishes at: ${endsAtClockTime}`);
+        showToast?.(`Standard video remaining: ${formatTime(remainingStandardTime)} (at 1x pace)`);
       }
       return next;
     });
-  }, [remainingRealTime, remainingStandardTime, endsAtClockTime, playbackRate, showToast]);
+  }, [remainingRealTime, remainingStandardTime, playbackRate, showToast]);
 
   const getTimeRemainingLabel = () => {
-    if (timeDisplayMode === 'endsAt') {
-      return `Ends at ${endsAtClockTime}`;
-    }
     if (timeDisplayMode === 'standard') {
       return formatTime(remainingStandardTime);
     }
@@ -1345,9 +1343,13 @@ export default function LecturePlayer({
                 setIsMuted(false);
                 setShowUnmuteBtn(false);
               }
+              if (altAudioRef.current && selectedAudioTrack > 0) {
+                altAudioRef.current.muted = false;
+              }
             }}
           >
-            <i className="fas fa-volume-mute"></i> Click to Unmute
+            <i className="fas fa-volume-up"></i>
+            <span>Click to Unmute</span>
           </button>
         )}
 
@@ -1455,22 +1457,14 @@ export default function LecturePlayer({
               </button>
 
               <div className="netflix-title-info">
-                <span className="netflix-series-title">{folderName || 'Courseflix'}</span>
+                <div className="netflix-title-row">
+                  <span className="netflix-ends-at-prefix">Ends at {endsAtClockTime}</span>
+                  <span className="netflix-title-dot">•</span>
+                  <span className="netflix-series-title">{folderName || 'Courseflix'}</span>
+                </div>
                 <span className="netflix-episode-title">
                   {currentIdx >= 0 ? `S1:E${currentIdx + 1} "${lecture.name}"` : lecture.name}
                 </span>
-                <div
-                  className="netflix-ends-at-badge"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    cycleTimeDisplayMode();
-                  }}
-                  title="Click to cycle time display format (Real / Video / Clock Time)"
-                >
-                  <span>Ends at <strong className="ends-at-highlight">{endsAtClockTime}</strong></span>
-                  <span className="ends-at-dot">•</span>
-                  <span>{formatTime(remainingRealTime)} left ({playbackRate}x)</span>
-                </div>
               </div>
 
               <div className="netflix-top-actions">
@@ -1705,12 +1699,27 @@ export default function LecturePlayer({
                   <span>Audio & Subtitles</span>
                 </button>
 
-                {/* 5. Next Ep. */}
+                {/* 5. Prev Ep. */}
+                <button
+                  className="netflix-bar-btn"
+                  onClick={playPrevLecture}
+                  disabled={!hasPrevLecture}
+                  style={{ opacity: hasPrevLecture ? 1 : 0.4 }}
+                  title={hasPrevLecture ? "Previous Episode" : "No previous episode"}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                  </svg>
+                  <span>Prev Ep.</span>
+                </button>
+
+                {/* 6. Next Ep. */}
                 <button
                   className="netflix-bar-btn"
                   onClick={playNextLecture}
                   disabled={!hasNextLecture}
                   style={{ opacity: hasNextLecture ? 1 : 0.4 }}
+                  title={hasNextLecture ? "Next Episode" : "No next episode"}
                 >
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>

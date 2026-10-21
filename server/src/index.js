@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { getLanAddresses, checkCandidatePorts, getTailscaleIp } from './network.js';
 import { configManager } from './configManager.js';
 import { scanFolder, resolveSecurePath, generateLectureKey } from './scanner.js';
-import { streamVideoFile, serveSubtitleFile, streamRemuxFile, serveEmbeddedSubtitle, serveAudioTrack } from './streamer.js';
+import { streamVideoFile, serveSubtitleFile, streamRemuxFile, serveEmbeddedSubtitle, serveAudioTrack, prewarmAudioTrack } from './streamer.js';
 import { metadataService } from './metadata.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -268,6 +268,15 @@ app.get('/api/media/tracks', async (req, res) => {
       srclang: s.language || 'en',
       src: `/api/subtitles/embedded?key=${encodeURIComponent(key)}&streamIndex=${s.streamIndex}`
     }));
+
+    // Pre-extract secondary audio tracks in the background so language switching is instant
+    if (Array.isArray(mediaInfo.audioTracks) && mediaInfo.audioTracks.length > 1) {
+      for (const track of mediaInfo.audioTracks) {
+        if (typeof track.streamIndex === 'number' && track.index > 0) {
+          prewarmAudioTrack(secureFilePath, track.streamIndex, track.codec).catch(() => {});
+        }
+      }
+    }
 
     res.json({
       duration: mediaInfo.duration,

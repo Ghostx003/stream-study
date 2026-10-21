@@ -293,10 +293,33 @@ video::-webkit-media-text-track-container {
   justify-content: center;
   text-align: center;
   max-width: calc(100% - 240px);
-  gap: 2px;
+  gap: 3px;
   pointer-events: none;
   z-index: 2;
 }
+
+.netflix-title-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.netflix-ends-at-prefix {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #e50914;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.netflix-title-dot {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.72rem;
+}
+
 .netflix-series-title {
   font-size: 0.76rem;
   color: #a3a3a3;
@@ -305,7 +328,11 @@ video::-webkit-media-text-track-container {
   font-weight: 700;
   text-align: center;
   line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
 .netflix-episode-title {
   font-size: 1rem;
   font-weight: 700;
@@ -317,34 +344,44 @@ video::-webkit-media-text-track-container {
   text-align: center;
   line-height: 1.2;
 }
-.netflix-ends-at-badge {
-  display: inline-flex;
+
+/* Unmute Overlay Button */
+.unmute-btn {
+  position: absolute;
+  top: 76px;
+  right: 24px;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.75);
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  padding: 2px 10px;
-  border-radius: 12px;
-  margin-top: 3px;
-  letter-spacing: 0.2px;
-  backdrop-filter: blur(4px);
-  pointer-events: auto;
-  cursor: pointer;
-}
-.netflix-ends-at-badge:hover {
-  background: rgba(0, 0, 0, 0.7);
-  border-color: rgba(255, 255, 255, 0.25);
+  gap: 8px;
+  background: rgba(18, 18, 18, 0.88);
   color: #ffffff;
+  border: 1px solid rgba(229, 9, 20, 0.7);
+  padding: 8px 16px;
+  border-radius: 24px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 40;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s ease;
+  pointer-events: auto;
 }
-.netflix-ends-at-badge .ends-at-highlight {
-  color: #E50914;
-  font-weight: 700;
+
+.unmute-btn i {
+  color: #e50914;
+  font-size: 0.95rem;
 }
-.netflix-ends-at-badge .ends-at-dot {
-  opacity: 0.4;
+
+.unmute-btn:hover {
+  background: #e50914;
+  border-color: #e50914;
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 6px 20px rgba(229, 9, 20, 0.4);
+}
+
+.unmute-btn:hover i {
+  color: #ffffff;
 }
 
 /* ==========================================================================

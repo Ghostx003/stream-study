@@ -172,6 +172,90 @@ const audioInFlight = new Map();
 /**
  * Serves an extracted individual audio track from a media file with HTTP 206 byte-ranges.
  */
+export function prewarmAudioTrack(filePath, streamIndex, knownCodec) {
+  if (!fs.existsSync(filePath)) return Promise.reject(new Error('File not found'));
+  const sIdx = parseInt(streamIndex, 10);
+  if (isNaN(sIdx) || sIdx < 0) return Promise.reject(new Error('Invalid stream index'));
+
+  const stat = fs.statSync(filePath);
+  const hash = crypto.createHash('md5').update(`${filePath}::${stat.size}::${stat.mtimeMs}::${sIdx}`).digest('hex');
+  const cachedFilePath = path.join(audioCacheDir, `${hash}.m4a`);
+
+  if (fs.existsSync(cachedFilePath)) {
+    return Promise.resolve(cachedFilePath);
+  }
+
+  if (audioInFlight.has(cachedFilePath)) {
+    return audioInFlight.get(cachedFilePath);
+  }
+
+  const extractionPromise = new Promise((resolve, reject) => {
+    const doExtraction = (codec) => {
+      const lower = (codec || '').trim().toLowerCase();
+      const canCopy = lower === 'aac' || lower === 'mp3';
+      const tempFile = `${cachedFilePath}.tmp_${Date.now()}`;
+
+      const runFfmpeg = (tryCopy) => {
+        const args = [
+          '-v', 'error',
+          '-threads', '0',
+          '-i', filePath,
+          '-map', `0:${sIdx}`,
+          '-c:a', tryCopy ? 'copy' : 'aac',
+          ...(tryCopy ? [] : ['-b:a', '192k', '-ac', '2']),
+          '-vn',
+          '-f', 'mp4',
+          '-movflags', '+faststart',
+          tempFile,
+          '-y'
+        ];
+
+        execFile('ffmpeg', args, { timeout: 120000 }, (ffErr) => {
+          if (ffErr) {
+            if (tryCopy) {
+              return runFfmpeg(false);
+            }
+            try { fs.unlinkSync(tempFile); } catch {}
+            return reject(ffErr);
+          }
+
+          try {
+            fs.renameSync(tempFile, cachedFilePath);
+          } catch (renameErr) {
+            // Already renamed by concurrent process
+          }
+          resolve(cachedFilePath);
+        });
+      };
+
+      runFfmpeg(canCopy);
+    };
+
+    if (knownCodec) {
+      doExtraction(knownCodec);
+    } else {
+      execFile('ffprobe', [
+        '-v', 'error',
+        '-select_streams', `${sIdx}`,
+        '-show_entries', 'stream=codec_name',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        filePath
+      ], (err, stdout) => {
+        doExtraction(stdout || '');
+      });
+    }
+  });
+
+  audioInFlight.set(cachedFilePath, extractionPromise);
+
+  extractionPromise
+    .finally(() => {
+      audioInFlight.delete(cachedFilePath);
+    });
+
+  return extractionPromise;
+}
+
 export function serveAudioTrack(req, res, filePath, streamIndex) {
   if (!fs.existsSync(filePath)) {
     return res.status(404).send('Media file not found');
@@ -191,74 +275,11 @@ export function serveAudioTrack(req, res, filePath, streamIndex) {
     return streamVideoFile(req, res, cachedFilePath);
   }
 
-  // If extraction is already in progress, wait for it then stream
-  if (audioInFlight.has(cachedFilePath)) {
-    return audioInFlight.get(cachedFilePath)
-      .then(() => streamVideoFile(req, res, cachedFilePath))
-      .catch(() => {
-        if (!res.headersSent) res.status(500).send('Audio extraction failed');
-      });
-  }
-
-  const extractionPromise = new Promise((resolve, reject) => {
-    execFile('ffprobe', [
-      '-v', 'error',
-      '-select_streams', `${sIdx}`,
-      '-show_entries', 'stream=codec_name',
-      '-of', 'default=noprint_wrappers=1:nokey=1',
-      filePath
-    ], (err, stdout) => {
-      const codec = (stdout || '').trim().toLowerCase();
-      const canCopy = codec === 'aac' || codec === 'mp3';
-
-      const tempFile = `${cachedFilePath}.tmp_${Date.now()}`;
-      const runFfmpeg = (tryCopy) => {
-        const args = [
-          '-v', 'error',
-          '-i', filePath,
-          '-map', `0:${sIdx}`,
-          '-c:a', tryCopy ? 'copy' : 'aac',
-          ...(tryCopy ? [] : ['-b:a', '192k', '-ac', '2']),
-          '-vn',
-          '-f', 'mp4',
-          '-movflags', '+faststart',
-          tempFile,
-          '-y'
-        ];
-
-        execFile('ffmpeg', args, { timeout: 120000 }, (ffErr) => {
-          if (ffErr) {
-            if (tryCopy) {
-              // Fallback to transcoding if copy failed
-              return runFfmpeg(false);
-            }
-            try { fs.unlinkSync(tempFile); } catch {}
-            return reject(ffErr);
-          }
-
-          try {
-            fs.renameSync(tempFile, cachedFilePath);
-          } catch (renameErr) {
-            // If already renamed by concurrent call, ignore
-          }
-
-          resolve();
-        });
-      };
-
-      runFfmpeg(canCopy);
-    });
-  });
-
-  audioInFlight.set(cachedFilePath, extractionPromise);
-
-  extractionPromise
-    .then(() => {
-      audioInFlight.delete(cachedFilePath);
-      streamVideoFile(req, res, cachedFilePath);
+  prewarmAudioTrack(filePath, sIdx)
+    .then((extractedPath) => {
+      streamVideoFile(req, res, extractedPath);
     })
     .catch((err) => {
-      audioInFlight.delete(cachedFilePath);
       if (!res.headersSent) res.status(500).send('Audio extraction failed: ' + (err?.message || err));
     });
 }
