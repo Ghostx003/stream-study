@@ -36,6 +36,10 @@ export default function ShortcutsModal({ isOpen, onClose }) {
                   <div style={{ display: 'flex', gap: '4px' }}><kbd style={kbdStyle}>&larr;</kbd><kbd style={kbdStyle}>&rarr;</kbd></div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Mouse Wheel Seek</span>
+                  <div style={{ display: 'flex', gap: '4px' }}><kbd style={kbdStyle}>Scroll &uarr;</kbd> / <kbd style={kbdStyle}>&darr;</kbd></div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Seek -30s / +30s</span>
                   <div style={{ display: 'flex', gap: '4px' }}><kbd style={kbdStyle}>Ctrl</kbd> + <kbd style={kbdStyle}>&rarr;</kbd></div>
                 </div>

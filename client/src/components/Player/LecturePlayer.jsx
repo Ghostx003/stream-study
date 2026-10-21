@@ -1012,6 +1012,47 @@ export default function LecturePlayer({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePlayPause, seekRelative, cycleSubtitle, toggleFullscreen, toggleMute, toggleBrownNoise, isLocked]);
 
+  // Mouse Wheel Scroll on Window to Seek Video Forward and Backward (PotPlayer / VLC style)
+  useEffect(() => {
+    let lastWheelTime = 0;
+    let accumulatedDelta = 0;
+
+    const handleWheel = (e) => {
+      // Don't intercept if screen is locked
+      if (isLocked) return;
+
+      // Don't intercept if scrolling inside a drawer, modal, or episodes list
+      if (e.target && (e.target.closest('.netflix-drawer') || e.target.closest('.modal-container') || e.target.closest('.netflix-episodes-list'))) {
+        return;
+      }
+
+      e.preventDefault();
+
+      accumulatedDelta += e.deltaY;
+      const now = Date.now();
+
+      // Fire seek after threshold reached or cooldown elapsed
+      if (Math.abs(accumulatedDelta) >= 35 || now - lastWheelTime > 90) {
+        const step = Math.abs(accumulatedDelta) > 90 ? 10 : 5;
+        if (accumulatedDelta < 0) {
+          // Scrolled UP -> Seek Forward
+          seekRelative(step);
+          showToast?.(`+${step}s`);
+        } else if (accumulatedDelta > 0) {
+          // Scrolled DOWN -> Seek Backward
+          seekRelative(-step);
+          showToast?.(`-${step}s`);
+        }
+        accumulatedDelta = 0;
+        lastWheelTime = now;
+        resetControlsTimeout();
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, [isLocked, seekRelative, resetControlsTimeout, showToast]);
+
   return (
     <div className={`netflix-player-root sub-size-${subFontSize}`} ref={containerRef}>
       {/* Dynamic Subtitle Font Size Override */}
