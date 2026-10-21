@@ -60,6 +60,9 @@ export default function LecturePlayer({
   // Subtitles & Audio Tracks
   const [availableSubtitles, setAvailableSubtitles] = useState(lecture.subtitles || []);
   const [selectedSubtitle, setSelectedSubtitle] = useState(null);
+  const [subFontSize, setSubFontSize] = useState(() => {
+    return localStorage.getItem('courseflix_sub_fontsize') || 'md';
+  });
   const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
   const [selectedAudioTrack, setSelectedAudioTrack] = useState(0);
 
@@ -318,21 +321,23 @@ export default function LecturePlayer({
         setAvailableAudioTracks(info.audioTracks);
         setSelectedAudioTrack(0);
       }
-      if (info.subtitles && info.subtitles.length > 0) {
-        const folderSubs = lecture.subtitles || [];
-        const combined = [...info.subtitles, ...folderSubs];
-        setAvailableSubtitles(combined);
-        // Automatically activate first English or default subtitle if not explicitly turned off
-        const savedSubPref = localStorage.getItem('courseflix_subtitles');
-        if (savedSubPref !== 'off') {
-          const defaultSub = combined.find(s => (s.srclang || '').toLowerCase().startsWith('en')) || combined[0];
-          setSelectedSubtitle(defaultSub);
+      // Combine and strictly deduplicate subtitles (prevent identical duplicate entries)
+      const rawSubs = [...(info.subtitles || []), ...(lecture.subtitles || [])];
+      const seenSubs = new Set();
+      const uniqueSubs = [];
+      for (const s of rawSubs) {
+        const uniqueKey = s.src || s.id || (s.streamIndex !== undefined ? `stream_${s.streamIndex}` : s.label);
+        if (!seenSubs.has(uniqueKey)) {
+          seenSubs.add(uniqueKey);
+          uniqueSubs.push(s);
         }
-      } else if (lecture.subtitles && lecture.subtitles.length > 0) {
-        setAvailableSubtitles(lecture.subtitles);
+      }
+
+      setAvailableSubtitles(uniqueSubs);
+      if (uniqueSubs.length > 0) {
         const savedSubPref = localStorage.getItem('courseflix_subtitles');
         if (savedSubPref !== 'off') {
-          const defaultSub = lecture.subtitles.find(s => (s.srclang || '').toLowerCase().startsWith('en')) || lecture.subtitles[0];
+          const defaultSub = uniqueSubs.find(s => (s.srclang || '').toLowerCase().startsWith('en')) || uniqueSubs[0];
           setSelectedSubtitle(defaultSub);
         }
       }
@@ -1008,7 +1013,17 @@ export default function LecturePlayer({
   }, [togglePlayPause, seekRelative, cycleSubtitle, toggleFullscreen, toggleMute, toggleBrownNoise, isLocked]);
 
   return (
-    <div className="netflix-player-root" ref={containerRef}>
+    <div className={`netflix-player-root sub-size-${subFontSize}`} ref={containerRef}>
+      {/* Dynamic Subtitle Font Size Override */}
+      <style>{`
+        ::cue, video::cue {
+          font-size: ${
+            subFontSize === 'sm' ? '1.05rem' :
+            subFontSize === 'lg' ? '1.85rem' :
+            subFontSize === 'xl' ? '2.35rem' : '1.38rem'
+          } !important;
+        }
+      `}</style>
       {/* Background Brown Noise Audio */}
       <audio
         ref={brownNoiseRef}
@@ -1237,15 +1252,19 @@ export default function LecturePlayer({
                   <i className="fas fa-wave-square"></i>
                 </button>
 
-                {/* Cast / TV */}
+                {/* Gear Settings: Subtitle & Playback Options */}
                 <button
-                  className="netflix-top-btn"
-                  onClick={() => showToast?.('AirPlay / Cast')}
-                  title="Cast to TV"
+                  className={`netflix-top-btn ${activeDrawer === 'subSettings' ? 'active' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveDrawer(prev => prev === 'subSettings' ? null : 'subSettings');
+                  }}
+                  title="Subtitle & Playback Settings"
+                  style={{ color: activeDrawer === 'subSettings' ? '#E50914' : 'inherit' }}
                 >
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="2" y="7" width="20" height="14" rx="2"/>
-                    <path d="M12 17h.01M17 21l-5-4-5 4"/>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                   </svg>
                 </button>
 
@@ -1432,8 +1451,8 @@ export default function LecturePlayer({
 
                 {/* 4. Audio & Subtitles */}
                 <button
-                  className={`netflix-bar-btn ${activeDrawer === 'audioSub' ? 'active' : ''}`}
-                  onClick={() => setActiveDrawer(prev => prev === 'audioSub' ? null : 'audioSub')}
+                  className={`netflix-bar-btn ${(activeDrawer === 'audioSub' || activeDrawer === 'subSettings') ? 'active' : ''}`}
+                  onClick={() => setActiveDrawer(prev => (prev === 'subSettings' || prev === 'audioSub') ? null : 'subSettings')}
                 >
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M20 2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l4 4 4-4h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-9 10H7v-2h4v2zm6 0h-4v-2h4v2zm0-4H7V6h10v2z"/>
@@ -1609,21 +1628,64 @@ export default function LecturePlayer({
           </div>
         )}
 
-        {/* 4. Audio & Subtitles Drawer */}
-        {activeDrawer === 'audioSub' && (
+        {/* 4. Subtitle & Audio Settings (Gear Box) Drawer */}
+        {(activeDrawer === 'audioSub' || activeDrawer === 'subSettings') && (
           <div className="netflix-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="netflix-drawer-header">
               <div className="drawer-title">
-                <i className="fas fa-comment-dots" style={{ color: '#E50914' }}></i>
-                <span>Audio & Subtitles</span>
+                <i className="fas fa-cog" style={{ color: '#E50914' }}></i>
+                <span>Subtitle & Audio Settings</span>
               </div>
               <button className="netflix-drawer-close" onClick={() => setActiveDrawer(null)}>
                 &times;
               </button>
             </div>
 
-            <div className="netflix-drawer-content">
-              <div className="netflix-audio-sub-columns">
+            <div className="netflix-drawer-content" style={{ maxHeight: '68vh', overflowY: 'auto', paddingBottom: '20px' }}>
+              {/* Subtitle Font Size Presets */}
+              <div className="sub-settings-section">
+                <div className="sub-settings-label">
+                  <span>SUBTITLE FONT SIZE</span>
+                  <span style={{ color: '#E50914', fontSize: '0.8rem' }}>{subFontSize.toUpperCase()}</span>
+                </div>
+                <div className="sub-size-pills">
+                  {[
+                    { id: 'sm', label: 'Small (80%)' },
+                    { id: 'md', label: 'Normal (100%)' },
+                    { id: 'lg', label: 'Large (130%)' },
+                    { id: 'xl', label: 'Huge (160%)' }
+                  ].map((opt) => (
+                    <div
+                      key={opt.id}
+                      className={`sub-size-pill ${subFontSize === opt.id ? 'active' : ''}`}
+                      onClick={() => {
+                        setSubFontSize(opt.id);
+                        localStorage.setItem('courseflix_sub_fontsize', opt.id);
+                        showToast?.(`Subtitle Size: ${opt.label}`);
+                      }}
+                    >
+                      {opt.label}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Anime Subtitle Live Preview Box */}
+                <div className="sub-preview-card">
+                  <div
+                    className="sub-preview-text"
+                    style={{
+                      fontSize: subFontSize === 'sm' ? '1.05rem' :
+                                subFontSize === 'lg' ? '1.75rem' :
+                                subFontSize === 'xl' ? '2.25rem' : '1.35rem'
+                    }}
+                  >
+                    H-h-hey! Not this way!
+                  </div>
+                </div>
+              </div>
+
+              {/* Subtitle & Audio Columns */}
+              <div className="netflix-audio-sub-columns" style={{ marginTop: '14px' }}>
                 {/* Audio Column */}
                 <div className="audio-sub-column">
                   <div className="column-title">AUDIO</div>
@@ -1678,36 +1740,39 @@ export default function LecturePlayer({
                       {selectedSubtitle === null && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
                     </div>
 
-                    {/* Detected Subtitle files (embedded & external) */}
-                    {availableSubtitles.map((sub) => (
-                      <div
-                        key={sub.id}
-                        className={`column-option-row ${selectedSubtitle?.id === sub.id ? 'selected' : ''}`}
-                        onClick={() => {
-                          setSelectedSubtitle(sub);
-                          localStorage.setItem('courseflix_subtitles', sub.id);
-                          showToast?.(`Subtitles: ${sub.label}`);
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span>{sub.label}</span>
-                          {sub.isEmbedded && (
-                            <span style={{
-                              fontSize: '0.62rem',
-                              padding: '1px 5px',
-                              borderRadius: '3px',
-                              background: 'rgba(229, 9, 20, 0.2)',
-                              color: '#ff6b6b',
-                              border: '1px solid rgba(229, 9, 20, 0.4)',
-                              fontWeight: '600'
-                            }}>
-                              EMBEDDED
-                            </span>
-                          )}
+                    {/* Detected Subtitle files (deduplicated) */}
+                    {availableSubtitles.map((sub) => {
+                      const isSelected = selectedSubtitle && (selectedSubtitle.id === sub.id || selectedSubtitle.src === sub.src);
+                      return (
+                        <div
+                          key={sub.id || sub.src}
+                          className={`column-option-row ${isSelected ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedSubtitle(sub);
+                            localStorage.setItem('courseflix_subtitles', sub.id || sub.src);
+                            showToast?.(`Subtitles: ${sub.label}`);
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>{sub.label}</span>
+                            {sub.isEmbedded && (
+                              <span style={{
+                                fontSize: '0.62rem',
+                                padding: '1px 5px',
+                                borderRadius: '3px',
+                                background: 'rgba(229, 9, 20, 0.2)',
+                                color: '#ff6b6b',
+                                border: '1px solid rgba(229, 9, 20, 0.4)',
+                                fontWeight: '600'
+                              }}>
+                                EMBEDDED
+                              </span>
+                            )}
+                          </div>
+                          {isSelected && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
                         </div>
-                        {selectedSubtitle?.id === sub.id && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
-                      </div>
-                    ))}
+                      );
+                    })}
 
                     {availableSubtitles.length === 0 && (
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: '8px 0' }}>

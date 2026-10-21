@@ -263,21 +263,24 @@ export async function scanFolder(root, relativeSubPath = '') {
       }
     }
 
-    // Associate embedded subtitles if cached in metadataService
+    // Associate embedded subtitles if cached in metadataService (avoiding duplicates)
     try {
       const vStat = fs.statSync(fullVideoPath);
       const cacheKey = `${fullVideoPath}::${vStat.size}::${vStat.mtimeMs}`;
       const cached = metadataService.cache[cacheKey];
       if (cached && cached.subtitles && cached.subtitles.length > 0) {
         for (const s of cached.subtitles) {
-          subtitles.push({
-            id: `embedded_${s.streamIndex}`,
-            isEmbedded: true,
-            streamIndex: s.streamIndex,
-            label: s.label,
-            srclang: s.language || 'en',
-            src: `/api/subtitles/embedded?key=${encodeURIComponent(lectureKey)}&streamIndex=${s.streamIndex}`
-          });
+          const subId = `embedded_${s.streamIndex}`;
+          if (!subtitles.some(x => x.id === subId || x.streamIndex === s.streamIndex)) {
+            subtitles.push({
+              id: subId,
+              isEmbedded: true,
+              streamIndex: s.streamIndex,
+              label: s.label,
+              srclang: s.language || 'en',
+              src: `/api/subtitles/embedded?key=${encodeURIComponent(lectureKey)}&streamIndex=${s.streamIndex}`
+            });
+          }
         }
       }
     } catch (e) {}

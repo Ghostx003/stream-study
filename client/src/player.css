@@ -88,16 +88,61 @@
   inset: 0 !important;
 }
 
-/* Subtitle styling */
-::cue {
-  background-color: rgba(0, 0, 0, 0.78);
-  color: #ffffff;
-  font-family: 'Inter', -apple-system, sans-serif;
-  font-size: 1.15rem;
-  font-weight: 600;
-  border-radius: 4px;
-  line-height: 1.4;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+/* Subtitle styling (Anime Comic Sans, Pure White, Transparent BG, Black Edge Outline) */
+::cue,
+::cue(b),
+::cue(i),
+::cue(u),
+::cue(c),
+video::cue {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #ffffff !important;
+  font-family: "Comic Sans MS", "Comic Sans", "Chalkboard SE", "Comic Neue", cursive, sans-serif !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  white-space: pre-line !important;
+  text-shadow: 
+    -2px -2px 0 #000000,  
+     2px -2px 0 #000000,
+    -2px  2px 0 #000000,
+     2px  2px 0 #000000,
+    -2px  0px 0 #000000,
+     2px  0px 0 #000000,
+     0px -2px 0 #000000,
+     0px  2px 0 #000000,
+    -1px -1px 0 #000000,
+     1px -1px 0 #000000,
+    -1px  1px 0 #000000,
+     1px  1px 0 #000000,
+     0 2px 4px rgba(0, 0, 0, 0.95) !important;
+  -webkit-text-stroke: 1.2px #000000 !important;
+}
+
+video::-webkit-media-text-track-display,
+video::-webkit-media-text-track-container {
+  background: transparent !important;
+}
+
+/* Subtitle Font Size Presets */
+.netflix-player-root.sub-size-sm ::cue,
+.sub-size-sm video::cue {
+  font-size: 1.05rem !important;
+}
+
+.netflix-player-root.sub-size-md ::cue,
+.sub-size-md video::cue {
+  font-size: 1.38rem !important;
+}
+
+.netflix-player-root.sub-size-lg ::cue,
+.sub-size-lg video::cue {
+  font-size: 1.85rem !important;
+}
+
+.netflix-player-root.sub-size-xl ::cue,
+.sub-size-xl video::cue {
+  font-size: 2.35rem !important;
 }
 
 /* ==========================================================================
@@ -915,6 +960,83 @@
 .column-option-row.selected {
   color: #ffffff;
   font-weight: 700;
+}
+
+/* Subtitle Settings & Gear Box Drawer */
+.sub-settings-section {
+  margin-bottom: 18px;
+}
+.sub-settings-label {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #9ca3af;
+  letter-spacing: 0.8px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sub-size-pills {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.sub-size-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #d1d5db;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.sub-size-pill:active {
+  transform: scale(0.96);
+}
+.sub-size-pill.active {
+  background: rgba(229, 9, 20, 0.2);
+  border-color: #E50914;
+  color: #ffffff;
+  font-weight: 700;
+}
+.sub-preview-card {
+  margin-top: 10px;
+  padding: 16px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 75px;
+  text-align: center;
+}
+.sub-preview-text {
+  font-family: "Comic Sans MS", "Comic Sans", "Chalkboard SE", "Comic Neue", cursive, sans-serif !important;
+  color: #ffffff !important;
+  background: transparent !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  text-shadow: 
+    -2px -2px 0 #000000,  
+     2px -2px 0 #000000,
+    -2px  2px 0 #000000,
+     2px  2px 0 #000000,
+    -2px  0px 0 #000000,
+     2px  0px 0 #000000,
+     0px -2px 0 #000000,
+     0px  2px 0 #000000,
+    -1px -1px 0 #000000,
+     1px -1px 0 #000000,
+    -1px  1px 0 #000000,
+     1px  1px 0 #000000,
+     0 2px 4px rgba(0, 0, 0, 0.95) !important;
+  -webkit-text-stroke: 1.2px #000000;
+  letter-spacing: 0.2px;
 }
 
 /* ==========================================================================
