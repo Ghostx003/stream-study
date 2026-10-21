@@ -225,14 +225,12 @@ app.all('/api/stream', (req, res) => {
 
   try {
     const secureFilePath = resolveSecurePath(targetRoot.path, relativeFilePath);
-    const ext = path.extname(secureFilePath).toLowerCase();
-    const isMkv = ext === '.mkv';
     const forceRemux = req.query.remux === '1' || req.query.remux === 'true';
-    const forceDirect = req.query.direct === '1' || req.query.direct === 'true';
-    const audioIdx = req.query.audio !== undefined && req.query.audio !== '' ? parseInt(req.query.audio, 10) : null;
-    const startTime = req.query.startTime !== undefined && req.query.startTime !== '' ? parseFloat(req.query.startTime) : null;
 
-    if (!forceDirect && (forceRemux || isMkv || (audioIdx !== null && !isNaN(audioIdx)) || (startTime !== null && !isNaN(startTime)))) {
+    // Direct byte-range streaming without conversion (native Chrome playback)
+    if (forceRemux) {
+      const audioIdx = req.query.audio !== undefined && req.query.audio !== '' ? parseInt(req.query.audio, 10) : null;
+      const startTime = req.query.startTime !== undefined && req.query.startTime !== '' ? parseFloat(req.query.startTime) : null;
       streamRemuxFile(req, res, secureFilePath, {
         startTime: startTime || 0,
         audioStreamIndex: audioIdx !== null && !isNaN(audioIdx) ? audioIdx : undefined

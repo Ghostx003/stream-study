@@ -25,11 +25,6 @@ export default function LecturePlayer({
   const resumeTimeRef = useRef(lecture.currentTime || 0);
   const lastSaveRef = useRef(0);
 
-  // MKV / Remux stream state & refs
-  const isMkv = !!(lecture.fileName?.toLowerCase().endsWith('.mkv') || lecture.isMkv);
-  const streamStartTimeRef = useRef(lecture.currentTime || 0);
-  const selectedAudioStreamIndexRef = useRef(null);
-
   // Pinch-to-zoom seeking lock refs
   const isPinchingRef = useRef(false);
   const lastPinchTimeRef = useRef(0);
@@ -160,37 +155,20 @@ export default function LecturePlayer({
     });
   }, [showAspectHud]);
 
-  // Master Seek Handler (Supports both standard Range seek and MKV on-the-fly keyframe seek)
+  // Master Seek Handler (Standard native byte-range seeking for all formats)
   const seekTo = useCallback((targetTime) => {
     const dur = duration || (videoRef.current ? videoRef.current.duration : 0) || 0;
     const clamped = Math.max(0, Math.min(dur || 999999, targetTime));
-    if (isMkv) {
-      streamStartTimeRef.current = clamped;
-      setCurrentTime(clamped);
-      if (videoRef.current) {
-        const newSrc = api.getVideoStreamUrl(lecture.id, {
-          startTime: clamped,
-          audio: selectedAudioStreamIndexRef.current,
-          remux: true
-        });
-        videoRef.current.src = newSrc;
-        videoRef.current.load();
-        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-      }
-    } else {
-      if (videoRef.current) {
-        videoRef.current.currentTime = clamped;
-      }
-      setCurrentTime(clamped);
+    if (videoRef.current) {
+      videoRef.current.currentTime = clamped;
     }
+    setCurrentTime(clamped);
     api.updateProgress(lecture.id, { currentTime: clamped, duration: dur }).catch(() => {});
     onUpdateLectureProgress?.(lecture.id, { currentTime: clamped });
-  }, [isMkv, duration, lecture.id, onUpdateLectureProgress]);
+  }, [duration, lecture.id, onUpdateLectureProgress]);
 
-  // Stream URL initialization (includes startTime for MKV if resuming)
-  const streamUrl = isMkv && resumeTimeRef.current > 1
-    ? api.getVideoStreamUrl(lecture.id, { startTime: resumeTimeRef.current, remux: true })
-    : api.getVideoStreamUrl(lecture.id);
+  // Direct native stream URL without conversion
+  const streamUrl = api.getVideoStreamUrl(lecture.id);
 
   // Initialize playback rate and settings from server
   useEffect(() => {
@@ -383,7 +361,7 @@ export default function LecturePlayer({
   const seekRelative = useCallback((seconds) => {
     if (!videoRef.current || isLocked) return;
     const dur = duration || (videoRef.current ? videoRef.current.duration : 0) || 0;
-    const cur = isMkv ? streamStartTimeRef.current + videoRef.current.currentTime : videoRef.current.currentTime;
+    const cur = videoRef.current.currentTime;
     const newTime = Math.max(0, Math.min(dur, cur + seconds));
     seekTo(newTime);
     if (seconds > 0) {
@@ -394,7 +372,7 @@ export default function LecturePlayer({
       setTimeout(() => setLeftSeekActive(false), 550);
     }
     resetControlsTimeout();
-  }, [isLocked, duration, isMkv, seekTo, resetControlsTimeout]);
+  }, [isLocked, duration, seekTo, resetControlsTimeout]);
 
   // Change playback speed
   const changeSpeed = useCallback((newSpeed) => {
@@ -524,9 +502,7 @@ export default function LecturePlayer({
         time: Date.now(),
         startVolume: videoRef.current ? videoRef.current.volume : volume,
         startBrightness: brightness,
-        startTime: isMkv
-          ? streamStartTimeRef.current + (videoRef.current ? videoRef.current.currentTime : 0)
-          : (videoRef.current ? videoRef.current.currentTime : currentTime),
+        startTime: videoRef.current ? videoRef.current.currentTime : currentTime,
         isLeftSide,
         isRightSide,
         isVertical: null,
@@ -698,9 +674,8 @@ export default function LecturePlayer({
   // Video element events
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
-    const rawCur = videoRef.current.currentTime;
+    const cur = videoRef.current.currentTime;
     const dur = videoRef.current.duration || duration || 0;
-    const cur = isMkv ? streamStartTimeRef.current + rawCur : rawCur;
     setCurrentTime(cur);
 
     if (cur <= 25 && dur > 25) {
@@ -721,7 +696,7 @@ export default function LecturePlayer({
   const handleLoadedMetadata = () => {
     if (!videoRef.current) return;
     const metaDur = Math.round(videoRef.current.duration || 0);
-    if (metaDur > 0 && !isMkv) {
+    if (metaDur > 0) {
       setDuration(metaDur);
       if (!lecture.duration || Math.abs(lecture.duration - metaDur) > 2) {
         api.reportDuration(lecture.id, metaDur).catch(() => {});
@@ -751,13 +726,11 @@ export default function LecturePlayer({
       }
     }
 
-    // Resume from where left off (if not MKV where startTime was already passed)
-    if (!isMkv) {
-      const targetTime = resumeTimeRef.current || lecture.currentTime || 0;
-      if (targetTime > 1 && targetTime < (metaDur || 999999) - 3) {
-        videoRef.current.currentTime = targetTime;
-        setCurrentTime(targetTime);
-      }
+    // Resume from where left off via native HTML5 seeking
+    const targetTime = resumeTimeRef.current || lecture.currentTime || 0;
+    if (targetTime > 1 && targetTime < (metaDur || 999999) - 3) {
+      videoRef.current.currentTime = targetTime;
+      setCurrentTime(targetTime);
     }
 
     videoRef.current.play().then(() => {
@@ -794,7 +767,7 @@ export default function LecturePlayer({
   const handleTimelineInput = (e) => {
     const val = parseFloat(e.target.value);
     setCurrentTime(val);
-    if (!isMkv && videoRef.current) {
+    if (videoRef.current) {
       videoRef.current.currentTime = val;
     }
   };
@@ -1425,20 +1398,7 @@ export default function LecturePlayer({
                         className={`column-option-row ${selectedAudioTrack === at.id ? 'selected' : ''}`}
                         onClick={() => {
                           setSelectedAudioTrack(at.id);
-                          selectedAudioStreamIndexRef.current = at.streamIndex;
-                          if (isMkv) {
-                            const cur = currentTime;
-                            streamStartTimeRef.current = cur;
-                            if (videoRef.current) {
-                              videoRef.current.src = api.getVideoStreamUrl(lecture.id, {
-                                startTime: cur,
-                                audio: at.streamIndex,
-                                remux: true
-                              });
-                              videoRef.current.load();
-                              videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-                            }
-                          } else if (videoRef.current && videoRef.current.audioTracks) {
+                          if (videoRef.current && videoRef.current.audioTracks) {
                             for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
                               videoRef.current.audioTracks[i].enabled = (i === at.id);
                             }

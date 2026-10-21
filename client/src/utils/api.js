@@ -55,24 +55,8 @@ export const api = {
     return fetchJson(`/scan?${params.toString()}`);
   },
 
-  // Video streaming stream URL
-  getVideoStreamUrl: (key, options = {}) => {
-    const params = new URLSearchParams();
-    params.append('key', key);
-    if (options.audio !== undefined && options.audio !== null) {
-      params.append('audio', options.audio);
-    }
-    if (options.startTime !== undefined && options.startTime !== null && options.startTime > 0) {
-      params.append('startTime', options.startTime);
-    }
-    if (options.remux) {
-      params.append('remux', '1');
-    }
-    if (options.direct) {
-      params.append('direct', '1');
-    }
-    return `${API_BASE}/stream?${params.toString()}`;
-  },
+  // Video streaming stream URL (Direct native byte-range streaming without conversion)
+  getVideoStreamUrl: (key) => `${API_BASE}/stream?key=${encodeURIComponent(key)}`,
 
   // Audio and embedded subtitle tracks
   getMediaTracks: (key) => fetchJson(`/media/tracks?key=${encodeURIComponent(key)}`),

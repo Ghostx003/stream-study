@@ -205,8 +205,8 @@ export function streamRemuxFile(req, res, filePath, options = {}) {
 }
 
 /**
- * Handles HTTP Range video streaming for a file.
- * Supports both GET and HEAD requests.
+ * Handles HTTP Range video streaming for a file without any conversion.
+ * Directly streams the original video file (.mp4, .mkv, .webm, etc.) with HTTP 206 Partial Content byte ranges.
  */
 export function streamVideoFile(req, res, filePath) {
   let stat;
@@ -229,7 +229,9 @@ export function streamVideoFile(req, res, filePath) {
     res.writeHead(200, {
       'Content-Length': fileSize,
       'Content-Type': mimeType,
-      'Accept-Ranges': 'bytes'
+      'Accept-Ranges': 'bytes',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges'
     });
     return res.end();
   }
@@ -241,7 +243,8 @@ export function streamVideoFile(req, res, filePath) {
       // 416 Range Not Satisfiable
       res.writeHead(416, {
         'Content-Range': `bytes */${fileSize}`,
-        'Content-Type': mimeType
+        'Content-Type': mimeType,
+        'Access-Control-Allow-Origin': '*'
       });
       return res.end();
     }
@@ -255,6 +258,8 @@ export function streamVideoFile(req, res, filePath) {
       'Accept-Ranges': 'bytes',
       'Content-Length': chunkSize,
       'Content-Type': mimeType,
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
       'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
 
@@ -280,6 +285,8 @@ export function streamVideoFile(req, res, filePath) {
       'Content-Length': fileSize,
       'Content-Type': mimeType,
       'Accept-Ranges': 'bytes',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
       'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
 
