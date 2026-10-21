@@ -87,6 +87,39 @@ export default function LecturePlayer({
     };
   }, []);
 
+  // Aspect Ratio Screen Fit ('fit' | 'fill' | 'stretch' | 'zoom')
+  const [aspectMode, setAspectMode] = useState(() => {
+    return localStorage.getItem('courseflix_aspect_ratio') || 'fit';
+  });
+  const [aspectNotification, setAspectNotification] = useState(null);
+  const aspectNotifyTimerRef = useRef(null);
+  const pinchStartRef = useRef(null);
+
+  const showAspectHud = useCallback((text) => {
+    setAspectNotification(text);
+    if (aspectNotifyTimerRef.current) clearTimeout(aspectNotifyTimerRef.current);
+    aspectNotifyTimerRef.current = setTimeout(() => {
+      setAspectNotification(null);
+    }, 1800);
+  }, []);
+
+  const cycleAspectMode = useCallback((e) => {
+    e?.stopPropagation?.();
+    const modes = [
+      { id: 'fit', label: 'Fit (Original 16:9)' },
+      { id: 'fill', label: 'Fill (Notch Covered)' },
+      { id: 'stretch', label: 'Stretch (Full Screen)' },
+      { id: 'zoom', label: 'Zoom (122% Punch-In)' }
+    ];
+    setAspectMode((prev) => {
+      const curIdx = modes.findIndex(m => m.id === prev);
+      const next = modes[(curIdx + 1) % modes.length];
+      localStorage.setItem('courseflix_aspect_ratio', next.id);
+      showAspectHud(next.label);
+      return next.id;
+    });
+  }, [showAspectHud]);
+
   // Stream URL
   const streamUrl = api.getVideoStreamUrl(lecture.id);
 
@@ -332,6 +365,15 @@ export default function LecturePlayer({
       return;
     }
 
+    if (e.touches.length === 2) {
+      // Pinch to Zoom gesture init
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      pinchStartRef.current = { dist, triggered: false };
+      return;
+    }
+
     if (e.touches.length === 1 && videoWrapperRef.current) {
       const t = e.touches[0];
       const rect = videoWrapperRef.current.getBoundingClientRect();
@@ -355,7 +397,29 @@ export default function LecturePlayer({
   };
 
   const handleTouchMove = (e) => {
-    if (isLocked || e.touches.length !== 1 || !videoWrapperRef.current) return;
+    if (isLocked || !videoWrapperRef.current) return;
+
+    // Handle 2-finger pinch gesture (Pinch in -> Fit, Pinch out -> Fill)
+    if (e.touches.length === 2 && pinchStartRef.current && !pinchStartRef.current.triggered) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const ratio = dist / pinchStartRef.current.dist;
+      if (ratio > 1.25) {
+        pinchStartRef.current.triggered = true;
+        setAspectMode('fill');
+        localStorage.setItem('courseflix_aspect_ratio', 'fill');
+        showAspectHud('Fill (Covering Notch)');
+      } else if (ratio < 0.78) {
+        pinchStartRef.current.triggered = true;
+        setAspectMode('fit');
+        localStorage.setItem('courseflix_aspect_ratio', 'fit');
+        showAspectHud('Fit (Original)');
+      }
+      return;
+    }
+
+    if (e.touches.length !== 1) return;
     const t = e.touches[0];
     const start = touchStartRef.current;
     const dx = t.clientX - start.x;
@@ -407,6 +471,7 @@ export default function LecturePlayer({
   };
 
   const handleTouchEnd = () => {
+    pinchStartRef.current = null;
     if (isLocked) return;
     const start = touchStartRef.current;
 
@@ -625,14 +690,21 @@ export default function LecturePlayer({
           setIsHideControls(prev => !prev);
         }}
       >
-        {/* Video Element with CSS Brightness filter */}
+        {/* Video Element with CSS Brightness & Aspect Ratio filter */}
         <video
           ref={videoRef}
           src={streamUrl}
-          className="netflix-video-element"
+          className={`netflix-video-element aspect-${aspectMode}`}
           autoPlay
           playsInline
-          style={{ filter: `brightness(${brightness})` }}
+          style={{
+            filter: `brightness(${brightness})`,
+            objectFit: aspectMode === 'fit' ? 'contain' : aspectMode === 'fill' ? 'cover' : aspectMode === 'stretch' ? 'fill' : 'cover',
+            transform: aspectMode === 'zoom' ? 'scale(1.22)' : 'none',
+            width: '100%',
+            height: '100%',
+            transition: 'transform 0.2s ease, object-fit 0.2s ease'
+          }}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={handleVideoEnded}
@@ -694,6 +766,16 @@ export default function LecturePlayer({
             <div className="slide-hud-time">
               {formatTime(slideSeek.targetTime)} <span style={{ opacity: 0.6 }}>/ {formatTime(duration)}</span>
             </div>
+          </div>
+        )}
+
+        {/* Aspect Ratio Screen Fit HUD Notification */}
+        {aspectNotification && (
+          <div className="netflix-aspect-hud">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+            </svg>
+            <span>{aspectNotification}</span>
           </div>
         )}
 
@@ -804,6 +886,23 @@ export default function LecturePlayer({
                       <path d="M15 3h6v6M9 21H3v-6M21 9V3m0 0l-7 7M3 15v6m0 0l7-7"/>
                     )}
                   </svg>
+                </button>
+
+                {/* Aspect Ratio Screen-Fit (Fit, Fill Notch, Stretch, Zoom) */}
+                <button
+                  className="netflix-top-btn aspect-btn"
+                  onClick={cycleAspectMode}
+                  title={`Aspect Ratio: ${aspectMode.toUpperCase()} (Tap to switch between Fit, Fill Notch, Stretch, Zoom)`}
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                    {aspectMode === 'fit' && <path d="M4 8V4h4m8 0h4v4m0 8v4h-4m-8 0H4v-4"/>}
+                    {aspectMode === 'fill' && <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>}
+                    {aspectMode === 'stretch' && <path d="M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4M17 8l4 4-4 4"/>}
+                    {aspectMode === 'zoom' && <path d="M15 15l6 6m-11-4a7 7 0 1 1 0-14 7 7 0 0 1 0 14zm-3-7h6m-3-3v6"/>}
+                  </svg>
+                  <span className="aspect-badge-text">
+                    {aspectMode === 'fit' ? 'FIT' : aspectMode === 'fill' ? 'FILL' : aspectMode === 'stretch' ? 'WIDE' : 'ZOOM'}
+                  </span>
                 </button>
 
                 {/* Lock Screen Button */}
