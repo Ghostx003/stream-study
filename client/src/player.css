@@ -194,10 +194,24 @@ video::-webkit-media-text-track-container {
    ========================================================================== */
 
 .netflix-top-bar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
+}
+
+.netflix-back-btn {
+  position: relative;
+  z-index: 5;
+}
+
+.netflix-top-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 5;
 }
 
 .netflix-top-btn {
@@ -248,34 +262,39 @@ video::-webkit-media-text-track-container {
 }
 
 .netflix-title-info {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
-  max-width: 60%;
+  max-width: calc(100% - 240px);
   gap: 2px;
+  pointer-events: none;
+  z-index: 2;
 }
 .netflix-series-title {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: #a3a3a3;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.1;
 }
 .netflix-episode-title {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 700;
   color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
-}
-
-.netflix-top-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  text-align: center;
+  line-height: 1.2;
 }
 
 /* ==========================================================================
@@ -1056,8 +1075,14 @@ video::-webkit-media-text-track-container {
     height: 36px;
     font-size: 1rem;
   }
+  .netflix-title-info {
+    max-width: calc(100% - 200px);
+  }
   .netflix-series-title {
-    display: none;
+    display: block;
+    font-size: 0.66rem;
+    color: #a3a3a3;
+    line-height: 1;
   }
   .netflix-episode-title {
     font-size: 0.85rem;
@@ -1150,8 +1175,15 @@ video::-webkit-media-text-track-container {
   .netflix-bar-btn i {
     font-size: 1rem;
   }
+  .netflix-title-info {
+    max-width: calc(100% - 150px);
+  }
+  .netflix-series-title {
+    font-size: 0.65rem;
+    line-height: 1;
+  }
   .netflix-episode-title {
-    font-size: 0.88rem;
+    font-size: 0.84rem;
   }
   .netflix-audio-sub-columns {
     grid-template-columns: 1fr;
