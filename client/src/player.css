@@ -292,10 +292,13 @@ video::-webkit-media-text-track-container {
   align-items: center;
   justify-content: center;
   text-align: center;
-  max-width: calc(100% - 240px);
+  max-width: min(650px, calc(100% - 480px));
+  width: max-content;
+  box-sizing: border-box;
   gap: 3px;
   pointer-events: none;
   z-index: 2;
+  overflow: hidden;
 }
 
 .netflix-title-row {
@@ -331,6 +334,7 @@ video::-webkit-media-text-track-container {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 280px;
 }
 
 .netflix-episode-title {
@@ -1416,7 +1420,7 @@ video::-webkit-media-text-track-container {
     font-size: 1rem;
   }
   .netflix-title-info {
-    max-width: calc(100% - 200px);
+    max-width: calc(100% - 320px);
   }
   .netflix-series-title {
     display: block;
@@ -1516,7 +1520,7 @@ video::-webkit-media-text-track-container {
     font-size: 1rem;
   }
   .netflix-title-info {
-    max-width: calc(100% - 150px);
+    max-width: calc(100% - 240px);
   }
   .netflix-series-title {
     font-size: 0.65rem;

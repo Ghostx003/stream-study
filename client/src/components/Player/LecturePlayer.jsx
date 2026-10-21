@@ -5,6 +5,13 @@ import ShortcutsModal from './ShortcutsModal';
 
 const PRESET_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5];
 
+const trimTitle = (str, maxLen = 42) => {
+  if (!str) return '';
+  const trimmed = str.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return trimmed.slice(0, maxLen).trim() + '…';
+};
+
 export default function LecturePlayer({
   lecture,
   playlist = [],
@@ -1460,10 +1467,17 @@ export default function LecturePlayer({
                 <div className="netflix-title-row">
                   <span className="netflix-ends-at-prefix">Ends at {endsAtClockTime}</span>
                   <span className="netflix-title-dot">•</span>
-                  <span className="netflix-series-title">{folderName || 'Courseflix'}</span>
+                  <span className="netflix-series-title" title={folderName || 'Courseflix'}>
+                    {trimTitle(folderName || 'Courseflix', 28)}
+                  </span>
                 </div>
-                <span className="netflix-episode-title">
-                  {currentIdx >= 0 ? `S1:E${currentIdx + 1} "${lecture.name}"` : lecture.name}
+                <span
+                  className="netflix-episode-title"
+                  title={currentIdx >= 0 ? `S1:E${currentIdx + 1} "${lecture.name}"` : lecture.name}
+                >
+                  {currentIdx >= 0
+                    ? `S1:E${currentIdx + 1} "${trimTitle(lecture.name, 45)}"`
+                    : trimTitle(lecture.name, 45)}
                 </span>
               </div>
 
