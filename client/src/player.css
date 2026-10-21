@@ -4,9 +4,17 @@
 
 .netflix-player-root {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100vw;
+  width: 100dvw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
+  height: 100%;
+  max-height: 100dvh;
   background-color: #000;
   z-index: 99999;
   overflow: hidden;
@@ -15,6 +23,7 @@
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
+  box-sizing: border-box;
 }
 
 .netflix-video-viewport {
@@ -25,6 +34,7 @@
   align-items: center;
   justify-content: center;
   background-color: #000;
+  overflow: hidden;
 }
 
 .netflix-video-element {
@@ -52,11 +62,14 @@
 
 .netflix-controls-layer {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: max(16px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  padding: max(12px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
   background: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0.88) 0%,
@@ -70,6 +83,7 @@
   transition: opacity 0.28s ease;
   opacity: 1;
   z-index: 100;
+  box-sizing: border-box;
 }
 
 .netflix-video-viewport.hide-controls .netflix-controls-layer {
@@ -180,24 +194,27 @@
 }
 
 .netflix-main-play-btn {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.45);
-  border: 2px solid rgba(255, 255, 255, 0.85);
+  background: none;
+  border: none;
   color: #ffffff;
-  font-size: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.7));
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  padding: 0;
+  width: 68px;
+  height: 68px;
+}
+.netflix-main-play-btn svg {
+  width: 52px;
+  height: 52px;
+  fill: #ffffff;
 }
 .netflix-main-play-btn:active {
-  transform: scale(0.9);
-  background-color: rgba(229, 9, 20, 0.4);
+  transform: scale(0.88);
+  opacity: 0.85;
 }
 .netflix-main-play-btn i.fa-play {
   margin-left: 4px;
@@ -347,22 +364,23 @@
 
 .netflix-skip-intro-btn {
   position: absolute;
-  right: max(24px, env(safe-area-inset-right));
-  bottom: 125px;
-  background: rgba(22, 22, 22, 0.88);
+  right: max(20px, env(safe-area-inset-right));
+  bottom: 78px;
+  background: rgba(22, 22, 22, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.4);
   color: #ffffff;
-  padding: 8px 18px;
+  padding: 6px 14px;
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 110;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   transition: background-color 0.15s ease, transform 0.15s ease;
 }
 .netflix-skip-intro-btn:hover {
@@ -377,8 +395,11 @@
 .netflix-bottom-controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
+  pointer-events: auto;
+  box-sizing: border-box;
+  margin-bottom: max(2px, env(safe-area-inset-bottom));
 }
 
 /* Timeline */
@@ -458,28 +479,46 @@
 .netflix-action-bar {
   display: flex;
   align-items: center;
-  justify-content: space-around;
+  justify-content: space-between;
   width: 100%;
   padding-top: 4px;
+  box-sizing: border-box;
 }
 
 .netflix-bar-btn {
   background: none;
   border: none;
-  color: #d1d5db;
+  color: #e5e5e5;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 5px;
-  font-size: 0.76rem;
+  gap: 8px;
+  font-size: 0.84rem;
   font-weight: 600;
   cursor: pointer;
   padding: 6px 10px;
   border-radius: 6px;
+  white-space: nowrap;
   transition: color 0.15s ease, transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.netflix-bar-btn svg {
+  flex-shrink: 0;
 }
 .netflix-bar-btn i {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
+}
+.netflix-bar-btn:active {
+  transform: scale(0.92);
+}
+.netflix-bar-btn.active,
+.netflix-bar-btn:hover {
+  color: #ffffff;
+}
+.netflix-bar-btn.active svg,
+.netflix-bar-btn.active i {
+  color: #E50914;
+  stroke: #E50914;
 }
 .netflix-bar-btn:active {
   transform: scale(0.92);
@@ -780,34 +819,118 @@
 }
 
 /* ==========================================================================
-   MOBILE RESPONSIVENESS & MEDIA QUERIES
+   MOBILE RESPONSIVENESS & MEDIA QUERIES (Landscape & Portrait Netflix Specs)
    ========================================================================== */
 
-@media (max-width: 768px) {
+/* Landscape Mode (The primary mode for watching on phones) */
+@media (max-height: 520px), (orientation: landscape) and (max-width: 1024px) {
+  .netflix-controls-layer {
+    padding: max(6px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  }
+  .netflix-top-bar {
+    height: 36px;
+  }
+  .netflix-top-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+  .netflix-series-title {
+    display: none;
+  }
+  .netflix-episode-title {
+    font-size: 0.85rem;
+    line-height: 1.2;
+  }
   .netflix-center-controls {
     gap: 36px;
   }
   .netflix-seek-circle-btn svg {
-    width: 42px;
-    height: 42px;
+    width: 38px;
+    height: 38px;
   }
   .netflix-main-play-btn {
-    width: 64px;
-    height: 64px;
-    font-size: 1.6rem;
+    width: 52px;
+    height: 52px;
+  }
+  .netflix-main-play-btn svg {
+    width: 40px;
+    height: 40px;
+  }
+  .netflix-skip-intro-btn {
+    bottom: 58px;
+    right: max(20px, env(safe-area-inset-right));
+    padding: 4px 10px;
+    font-size: 0.74rem;
+  }
+  .netflix-bottom-controls {
+    gap: 3px;
+    margin-bottom: 2px;
+  }
+  .netflix-timeline-wrapper {
+    gap: 8px;
+  }
+  .netflix-timeline-slider {
+    height: 3px;
+  }
+  .netflix-time-remaining {
+    font-size: 0.78rem;
+  }
+  .netflix-action-bar {
+    padding-top: 2px;
+    justify-content: space-between;
+  }
+  .netflix-bar-btn {
+    flex-direction: row;
+    padding: 4px 6px;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .netflix-bar-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+  .netflix-bar-btn i {
+    font-size: 0.95rem;
+  }
+}
+
+/* Portrait Mode on Mobile Phones */
+@media (max-width: 600px) and (orientation: portrait) {
+  .netflix-center-controls {
+    gap: 32px;
+  }
+  .netflix-seek-circle-btn svg {
+    width: 40px;
+    height: 40px;
+  }
+  .netflix-main-play-btn {
+    width: 58px;
+    height: 58px;
+  }
+  .netflix-main-play-btn svg {
+    width: 44px;
+    height: 44px;
   }
   .netflix-action-bar {
     justify-content: space-between;
   }
   .netflix-bar-btn {
-    padding: 6px 6px;
-    font-size: 0.7rem;
+    flex-direction: column;
+    padding: 4px 2px;
+    gap: 3px;
+    font-size: 0.68rem;
+  }
+  .netflix-bar-btn svg {
+    width: 18px;
+    height: 18px;
   }
   .netflix-bar-btn i {
-    font-size: 1.05rem;
+    font-size: 1rem;
   }
   .netflix-episode-title {
-    font-size: 0.92rem;
+    font-size: 0.88rem;
   }
   .netflix-audio-sub-columns {
     grid-template-columns: 1fr;

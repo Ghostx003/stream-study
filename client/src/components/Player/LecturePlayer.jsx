@@ -72,6 +72,21 @@ export default function LecturePlayer({
   const isCyclingRef = useRef(false);
   const lastTapRef = useRef({ time: 0, x: 0 });
 
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement || !!document.webkitFullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
   // Stream URL
   const streamUrl = api.getVideoStreamUrl(lecture.id);
 
@@ -216,10 +231,18 @@ export default function LecturePlayer({
   // Fullscreen
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(() => {});
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (containerRef.current.requestFullscreen) {
+        containerRef.current.requestFullscreen().catch(() => {});
+      } else if (containerRef.current.webkitRequestFullscreen) {
+        containerRef.current.webkitRequestFullscreen().catch(() => {});
+      }
     } else {
-      document.exitFullscreen().catch(() => {});
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen().catch(() => {});
+      }
     }
   }, []);
 
@@ -762,7 +785,25 @@ export default function LecturePlayer({
                   onClick={() => showToast?.('AirPlay / Cast')}
                   title="Cast to TV"
                 >
-                  <i className="fas fa-tv"></i>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="7" width="20" height="14" rx="2"/>
+                    <path d="M12 17h.01M17 21l-5-4-5 4"/>
+                  </svg>
+                </button>
+
+                {/* Fullscreen Toggle */}
+                <button
+                  className="netflix-top-btn"
+                  onClick={toggleFullscreen}
+                  title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+                >
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                    {isFullscreen ? (
+                      <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+                    ) : (
+                      <path d="M15 3h6v6M9 21H3v-6M21 9V3m0 0l-7 7M3 15v6m0 0l7-7"/>
+                    )}
+                  </svg>
                 </button>
 
                 {/* Lock Screen Button */}
@@ -775,7 +816,10 @@ export default function LecturePlayer({
                   }}
                   title="Lock Screen"
                 >
-                  <i className="fas fa-unlock"></i>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -794,13 +838,21 @@ export default function LecturePlayer({
                 </svg>
               </button>
 
-              {/* Big Play / Pause */}
+              {/* Big Play / Pause (Netflix Pure Geometric Icon) */}
               <button
                 className="netflix-main-play-btn"
                 onClick={togglePlayPause}
                 title={isPlaying ? 'Pause' : 'Play'}
               >
-                <i className={`fas fa-${isPlaying ? 'pause' : 'play'}`}></i>
+                {isPlaying ? (
+                  <svg viewBox="0 0 24 24" width="46" height="46" fill="currentColor">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" width="52" height="52" fill="currentColor" style={{ marginLeft: '4px' }}>
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                )}
               </button>
 
               {/* Forward 10s */}
@@ -869,12 +921,14 @@ export default function LecturePlayer({
 
               {/* Bottom 5 Action Buttons (Matching exact Netflix mobile UI) */}
               <div className="netflix-action-bar">
-                {/* 1. Moments (Highlighted in user reference) */}
+                {/* 1. Moments */}
                 <button
                   className={`netflix-bar-btn ${activeDrawer === 'moments' ? 'active' : ''}`}
                   onClick={() => setActiveDrawer(prev => prev === 'moments' ? null : 'moments')}
                 >
-                  <i className="fas fa-bookmark"></i>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                  </svg>
                   <span>Moments</span>
                 </button>
 
@@ -883,7 +937,9 @@ export default function LecturePlayer({
                   className={`netflix-bar-btn ${activeDrawer === 'speed' ? 'active' : ''}`}
                   onClick={() => setActiveDrawer(prev => prev === 'speed' ? null : 'speed')}
                 >
-                  <i className="fas fa-tachometer-alt"></i>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93V17a1 1 0 0 1-2 0v-.07a8 8 0 0 1-4.93-4.93H6a1 1 0 0 1 0-2h.07A8 8 0 0 1 11 5.07V5a1 1 0 0 1 2 0v.07a8 8 0 0 1 4.93 4.93H18a1 1 0 0 1 0 2h-.07a8 8 0 0 1-4.93 4.93zM12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4zm-1 3h2v2h-2z"/>
+                  </svg>
                   <span>Speed ({playbackRate}x)</span>
                 </button>
 
@@ -892,7 +948,10 @@ export default function LecturePlayer({
                   className={`netflix-bar-btn ${activeDrawer === 'episodes' ? 'active' : ''}`}
                   onClick={() => setActiveDrawer(prev => prev === 'episodes' ? null : 'episodes')}
                 >
-                  <i className="fas fa-layer-group"></i>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="7" width="16" height="13" rx="2"/>
+                    <path d="M6 3h14a2 2 0 0 1 2 2v12"/>
+                  </svg>
                   <span>Episodes</span>
                 </button>
 
@@ -901,7 +960,9 @@ export default function LecturePlayer({
                   className={`netflix-bar-btn ${activeDrawer === 'audioSub' ? 'active' : ''}`}
                   onClick={() => setActiveDrawer(prev => prev === 'audioSub' ? null : 'audioSub')}
                 >
-                  <i className="fas fa-comment-dots"></i>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M20 2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l4 4 4-4h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-9 10H7v-2h4v2zm6 0h-4v-2h4v2zm0-4H7V6h10v2z"/>
+                  </svg>
                   <span>Audio & Subtitles</span>
                 </button>
 
@@ -912,7 +973,9 @@ export default function LecturePlayer({
                   disabled={!hasNextLecture}
                   style={{ opacity: hasNextLecture ? 1 : 0.4 }}
                 >
-                  <i className="fas fa-step-forward"></i>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                  </svg>
                   <span>Next Ep.</span>
                 </button>
               </div>
