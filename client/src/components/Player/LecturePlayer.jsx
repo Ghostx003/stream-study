@@ -17,6 +17,7 @@ export default function LecturePlayer({
 }) {
   const videoRef = useRef(null);
   const brownNoiseRef = useRef(null);
+  const altAudioRef = useRef(null);
   const containerRef = useRef(null);
   const videoWrapperRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
@@ -162,10 +163,55 @@ export default function LecturePlayer({
     if (videoRef.current) {
       videoRef.current.currentTime = clamped;
     }
+    if (altAudioRef.current && altAudioRef.current.src) {
+      altAudioRef.current.currentTime = clamped;
+    }
     setCurrentTime(clamped);
     api.updateProgress(lecture.id, { currentTime: clamped, duration: dur }).catch(() => {});
     onUpdateLectureProgress?.(lecture.id, { currentTime: clamped });
   }, [duration, lecture.id, onUpdateLectureProgress]);
+
+  // Audio Track Selection Handler (supports both native Safari and Chrome/Firefox synchronized stream fallback)
+  const handleSelectAudioTrack = useCallback((at) => {
+    setSelectedAudioTrack(at.index);
+    showToast?.(`Audio: ${at.label}`);
+
+    // Safari / WebKit native audioTracks API
+    if (videoRef.current && videoRef.current.audioTracks && videoRef.current.audioTracks.length > 0) {
+      for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
+        videoRef.current.audioTracks[i].enabled = (i === at.index);
+      }
+      return;
+    }
+
+    // Chrome / Edge / Firefox / Android fallback via synchronized audio element
+    if (!videoRef.current) return;
+    const curTime = videoRef.current.currentTime || 0;
+    const isCurrentlyPlaying = !videoRef.current.paused;
+
+    if (at.index === 0) {
+      // Revert to primary audio track in native video element
+      videoRef.current.muted = false;
+      setIsMuted(false);
+      if (altAudioRef.current) {
+        altAudioRef.current.pause();
+        altAudioRef.current.src = '';
+      }
+    } else {
+      // Switch to secondary audio track via synchronized audio element
+      videoRef.current.muted = true;
+      if (altAudioRef.current) {
+        const audioUrl = `/api/audio/track?key=${encodeURIComponent(lecture.id)}&streamIndex=${at.streamIndex}`;
+        altAudioRef.current.src = audioUrl;
+        altAudioRef.current.currentTime = curTime;
+        altAudioRef.current.volume = volume;
+        altAudioRef.current.playbackRate = playbackRate;
+        if (isCurrentlyPlaying) {
+          altAudioRef.current.play().catch(() => {});
+        }
+      }
+    }
+  }, [lecture.id, volume, playbackRate, showToast]);
 
   // Subtitle Cycling Handler (Off -> Sub 1 -> Sub 2 -> ... -> Off)
   const cycleSubtitle = useCallback(() => {
@@ -233,6 +279,11 @@ export default function LecturePlayer({
     setBookmarks(lecture.bookmarks || []);
     setAvailableSubtitles(lecture.subtitles || []);
     setSelectedSubtitle(null);
+    setSelectedAudioTrack(0);
+    if (altAudioRef.current) {
+      altAudioRef.current.pause();
+      altAudioRef.current.src = '';
+    }
     const initialTime = lecture.currentTime || 0;
     setCurrentTime(initialTime);
     resumeTimeRef.current = initialTime;
@@ -388,6 +439,10 @@ export default function LecturePlayer({
     if (videoRef.current.paused) {
       videoRef.current.play().then(() => {
         setIsPlaying(true);
+        if (altAudioRef.current && altAudioRef.current.src && altAudioRef.current.paused) {
+          altAudioRef.current.currentTime = videoRef.current.currentTime;
+          altAudioRef.current.play().catch(() => {});
+        }
         if (brownNoiseActive && brownNoiseRef.current && brownNoiseRef.current.paused) {
           brownNoiseRef.current.play().catch(() => {});
         }
@@ -402,6 +457,9 @@ export default function LecturePlayer({
     } else {
       videoRef.current.pause();
       setIsPlaying(false);
+      if (altAudioRef.current && !altAudioRef.current.paused) {
+        altAudioRef.current.pause();
+      }
       if (brownNoiseRef.current && !brownNoiseRef.current.paused) {
         brownNoiseRef.current.pause();
       }
@@ -432,6 +490,9 @@ export default function LecturePlayer({
     setPlaybackRate(clamped);
     if (videoRef.current) {
       videoRef.current.playbackRate = clamped;
+    }
+    if (altAudioRef.current) {
+      altAudioRef.current.playbackRate = clamped;
     }
     showToast?.(`Speed: ${clamped}x`);
   }, [showToast]);
@@ -624,10 +685,18 @@ export default function LecturePlayer({
         const newVol = Math.max(0, Math.min(1.0, start.startVolume + deltaRatio));
         setVolume(newVol);
         if (videoRef.current) {
-          videoRef.current.volume = newVol;
-          if (newVol > 0 && videoRef.current.muted) {
-            videoRef.current.muted = false;
-            setIsMuted(false);
+          if (selectedAudioTrack === 0) {
+            videoRef.current.volume = newVol;
+            if (newVol > 0 && videoRef.current.muted) {
+              videoRef.current.muted = false;
+              setIsMuted(false);
+            }
+          }
+        }
+        if (altAudioRef.current) {
+          altAudioRef.current.volume = newVol;
+          if (newVol > 0 && altAudioRef.current.muted) {
+            altAudioRef.current.muted = false;
           }
         }
         setShowVolumeSlider(true);
@@ -799,6 +868,9 @@ export default function LecturePlayer({
 
   const handlePause = () => {
     setIsPlaying(false);
+    if (altAudioRef.current && !altAudioRef.current.paused) {
+      altAudioRef.current.pause();
+    }
     if (videoRef.current && currentTime > 0) {
       api.updateProgress(lecture.id, {
         currentTime: currentTime,
@@ -811,6 +883,7 @@ export default function LecturePlayer({
   const handleVideoEnded = () => {
     setIsPlaying(false);
     if (brownNoiseRef.current) brownNoiseRef.current.pause();
+    if (altAudioRef.current) altAudioRef.current.pause();
     onToggleLectureCompleted(lecture.id, true);
     playNextLecture();
   };
@@ -821,6 +894,9 @@ export default function LecturePlayer({
     setCurrentTime(val);
     if (videoRef.current) {
       videoRef.current.currentTime = val;
+    }
+    if (altAudioRef.current && altAudioRef.current.src) {
+      altAudioRef.current.currentTime = val;
     }
   };
 
@@ -856,12 +932,17 @@ export default function LecturePlayer({
   // Mute / Unmute
   const toggleMute = useCallback(() => {
     if (!videoRef.current) return;
-    const nextMuted = !videoRef.current.muted;
-    videoRef.current.muted = nextMuted;
+    const nextMuted = !isMuted;
     setIsMuted(nextMuted);
+    if (selectedAudioTrack === 0) {
+      videoRef.current.muted = nextMuted;
+    }
+    if (altAudioRef.current) {
+      altAudioRef.current.muted = nextMuted;
+    }
     setShowUnmuteBtn(false);
     showToast?.(nextMuted ? 'Muted' : 'Unmuted');
-  }, [showToast]);
+  }, [isMuted, selectedAudioTrack, showToast]);
 
   // Global Keyboard Shortcuts (Space, Left/Right, V/S for Subtitles, F for Fullscreen, M for Mute, B for Brown Noise)
   useEffect(() => {
@@ -933,6 +1014,14 @@ export default function LecturePlayer({
         ref={brownNoiseRef}
         src="/brown.dat"
         loop
+        preload="auto"
+        style={{ display: 'none' }}
+      />
+
+      {/* Synchronized Alternate Audio Track */}
+      <audio
+        ref={altAudioRef}
+        playsInline
         preload="auto"
         style={{ display: 'none' }}
       />
@@ -1541,22 +1630,34 @@ export default function LecturePlayer({
                   <div className="column-options">
                     {availableAudioTracks.map((at) => (
                       <div
-                        key={at.id}
-                        className={`column-option-row ${selectedAudioTrack === at.id ? 'selected' : ''}`}
-                        onClick={() => {
-                          setSelectedAudioTrack(at.id);
-                          if (videoRef.current && videoRef.current.audioTracks) {
-                            for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
-                              videoRef.current.audioTracks[i].enabled = (i === at.id);
-                            }
-                          }
-                          showToast?.(`Audio: ${at.label}`);
-                        }}
+                        key={at.streamIndex ?? at.index}
+                        className={`column-option-row ${selectedAudioTrack === at.index ? 'selected' : ''}`}
+                        onClick={() => handleSelectAudioTrack(at)}
                       >
-                        <span>{at.label}</span>
-                        {selectedAudioTrack === at.id && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{at.label}</span>
+                          {at.language && at.language !== 'und' && (
+                            <span style={{
+                              fontSize: '0.62rem',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              background: 'rgba(255, 255, 255, 0.1)',
+                              color: 'rgba(255, 255, 255, 0.8)',
+                              textTransform: 'uppercase',
+                              fontWeight: '600'
+                            }}>
+                              {at.language}
+                            </span>
+                          )}
+                        </div>
+                        {selectedAudioTrack === at.index && <i className="fas fa-check" style={{ color: '#E50914' }}></i>}
                       </div>
                     ))}
+                    {availableAudioTracks.length === 0 && (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: '8px 0' }}>
+                        Default Audio Track
+                      </div>
+                    )}
                   </div>
                 </div>
 

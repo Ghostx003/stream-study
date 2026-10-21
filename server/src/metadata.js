@@ -121,6 +121,7 @@ class MetadataService {
                 }
 
                 audioTracks.push({
+                  id: `audio_${s.index}`,
                   index: audioTracks.length,
                   streamIndex: s.index,
                   codec: s.codec_name,

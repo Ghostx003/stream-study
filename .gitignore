@@ -21,3 +21,4 @@ Thumbs.db
 
 # Temporary / reference clones
 Temporary/
+server/data/cache/

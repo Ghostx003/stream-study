@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { getLanAddresses, checkCandidatePorts, getTailscaleIp } from './network.js';
 import { configManager } from './configManager.js';
 import { scanFolder, resolveSecurePath, generateLectureKey } from './scanner.js';
-import { streamVideoFile, serveSubtitleFile, streamRemuxFile, serveEmbeddedSubtitle } from './streamer.js';
+import { streamVideoFile, serveSubtitleFile, streamRemuxFile, serveEmbeddedSubtitle, serveAudioTrack } from './streamer.js';
 import { metadataService } from './metadata.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -296,6 +296,26 @@ app.get('/api/subtitles/embedded', (req, res) => {
     const relativeFilePath = parts.slice(1).join('::');
     const secureFilePath = resolveSecurePath(root.path, relativeFilePath);
     serveEmbeddedSubtitle(req, res, secureFilePath, streamIndex);
+  } catch (err) {
+    res.status(403).send('Forbidden: Access denied');
+  }
+});
+
+// Audio track delivery endpoint (for secondary/alternate audio stream switching)
+app.get('/api/audio/track', (req, res) => {
+  const { key, streamIndex } = req.query;
+  if (!key || streamIndex === undefined) return res.status(400).send('Missing key or streamIndex');
+
+  const parts = key.split('::');
+  if (parts.length < 2) return res.status(400).send('Invalid lecture key');
+
+  const root = configManager.getRoots().find(r => r.id === parts[0]);
+  if (!root) return res.status(404).send('Media root not found');
+
+  try {
+    const relativeFilePath = parts.slice(1).join('::');
+    const secureFilePath = resolveSecurePath(root.path, relativeFilePath);
+    serveAudioTrack(req, res, secureFilePath, streamIndex);
   } catch (err) {
     res.status(403).send('Forbidden: Access denied');
   }
