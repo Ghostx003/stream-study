@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { spawn } from 'child_process';
 
 const MIME_MAP = {
   '.mp4': 'video/mp4',
@@ -86,6 +87,121 @@ export function serveSubtitleFile(req, res, filePath) {
     'Cache-Control': 'public, max-age=3600'
   });
   res.end(vttContent);
+}
+
+/**
+ * Extracts embedded subtitles from a video file (e.g. MKV) and streams as WebVTT.
+ */
+export function serveEmbeddedSubtitle(req, res, filePath, streamIndex) {
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('Media file not found');
+  }
+
+  const sIdx = parseInt(streamIndex, 10);
+  if (isNaN(sIdx) || sIdx < 0) {
+    return res.status(400).send('Invalid stream index');
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/vtt; charset=utf-8',
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'public, max-age=86400'
+  });
+
+  const ff = spawn('ffmpeg', [
+    '-v', 'error',
+    '-i', filePath,
+    '-map', `0:${sIdx}`,
+    '-f', 'webvtt',
+    '-'
+  ], { stdio: ['ignore', 'pipe', 'ignore'] });
+
+  ff.stdout.pipe(res);
+
+  req.on('close', () => {
+    try {
+      ff.kill('SIGKILL');
+    } catch {}
+  });
+
+  ff.on('error', () => {
+    if (!res.headersSent) {
+      res.status(500).send('Failed to extract subtitle');
+    }
+  });
+}
+
+/**
+ * Streams MKV / incompatible video files by remuxing to fragmented MP4 on the fly.
+ * Video is copied directly (-c:v copy) for instantaneous startup and 0% CPU overhead.
+ * Audio is converted to AAC 2.0 (-c:a aac) ensuring universal playback on all mobile devices.
+ */
+export function streamRemuxFile(req, res, filePath, options = {}) {
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch (err) {
+    return res.status(404).json({ error: 'Video file not found' });
+  }
+
+  const startTime = options.startTime ? Math.max(0, parseFloat(options.startTime)) : 0;
+  const audioStreamIndex = options.audioStreamIndex;
+
+  res.writeHead(200, {
+    'Content-Type': 'video/mp4',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+
+  if (req.method === 'HEAD') {
+    return res.end();
+  }
+
+  const args = ['-v', 'error'];
+
+  if (startTime > 0) {
+    args.push('-ss', String(startTime));
+  }
+
+  args.push('-i', filePath);
+  args.push('-map', '0:v:0');
+
+  if (typeof audioStreamIndex === 'number' && audioStreamIndex >= 0) {
+    args.push('-map', `0:${audioStreamIndex}`);
+  } else {
+    args.push('-map', '0:a:0?');
+  }
+
+  // Copy video 1:1 without re-encoding; convert audio to standard AAC stereo
+  args.push(
+    '-c:v', 'copy',
+    '-c:a', 'aac',
+    '-b:a', '192k',
+    '-ac', '2',
+    '-f', 'mp4',
+    '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+    'pipe:1'
+  );
+
+  const ff = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore'] });
+
+  ff.stdout.pipe(res);
+
+  req.on('close', () => {
+    try {
+      ff.kill('SIGKILL');
+    } catch {}
+  });
+
+  ff.on('error', (err) => {
+    try {
+      ff.kill('SIGKILL');
+    } catch {}
+    if (!res.headersSent) {
+      res.status(500).send('Remux error');
+    }
+  });
 }
 
 /**

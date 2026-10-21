@@ -61,6 +61,146 @@ class MetadataService {
   }
 
   /**
+   * Probes audio and subtitle streams using ffprobe.
+   */
+  getMediaStreams(filePath) {
+    return new Promise((resolve) => {
+      execFile(
+        'ffprobe',
+        [
+          '-v', 'error',
+          '-show_entries', 'stream=index,codec_name,codec_type:stream_tags=language,title',
+          '-of', 'json',
+          filePath
+        ],
+        { timeout: 8000 },
+        (error, stdout) => {
+          if (error || !stdout) {
+            resolve({ audioTracks: [], subtitles: [], video: null });
+            return;
+          }
+          try {
+            const data = JSON.parse(stdout);
+            const streams = data.streams || [];
+            const audioTracks = [];
+            const subtitles = [];
+            let video = null;
+
+            const LANG_MAP = {
+              'eng': 'English', 'en': 'English',
+              'jpn': 'Japanese', 'ja': 'Japanese',
+              'hin': 'Hindi', 'hi': 'Hindi',
+              'spa': 'Spanish', 'es': 'Spanish',
+              'fra': 'French', 'fr': 'French',
+              'deu': 'German', 'ger': 'German', 'de': 'German',
+              'ita': 'Italian', 'it': 'Italian',
+              'kor': 'Korean', 'ko': 'Korean',
+              'zho': 'Chinese', 'chi': 'Chinese', 'zh': 'Chinese',
+              'rus': 'Russian', 'ru': 'Russian',
+              'ara': 'Arabic', 'ar': 'Arabic',
+              'por': 'Portuguese', 'pt': 'Portuguese'
+            };
+
+            for (const s of streams) {
+              const langCode = (s.tags?.language || '').toLowerCase();
+              const langName = LANG_MAP[langCode] || (langCode ? langCode.toUpperCase() : '');
+              const streamTitle = s.tags?.title || '';
+
+              if (s.codec_type === 'video' && !video) {
+                video = { index: s.index, codec: s.codec_name };
+              } else if (s.codec_type === 'audio') {
+                let label = '';
+                if (langName && streamTitle) {
+                  label = `${langName} — ${streamTitle}`;
+                } else if (langName) {
+                  label = `${langName} (${s.codec_name?.toUpperCase() || 'Audio'})`;
+                } else if (streamTitle) {
+                  label = streamTitle;
+                } else {
+                  label = `Audio Track ${audioTracks.length + 1} (${s.codec_name?.toUpperCase() || ''})`;
+                }
+
+                audioTracks.push({
+                  index: audioTracks.length,
+                  streamIndex: s.index,
+                  codec: s.codec_name,
+                  language: langCode || 'und',
+                  title: streamTitle,
+                  label
+                });
+              } else if (s.codec_type === 'subtitle') {
+                let label = '';
+                if (langName && streamTitle) {
+                  label = `${langName} — ${streamTitle}`;
+                } else if (langName) {
+                  label = `${langName} Subtitles`;
+                } else if (streamTitle) {
+                  label = streamTitle;
+                } else {
+                  label = `Subtitle ${subtitles.length + 1}`;
+                }
+
+                subtitles.push({
+                  index: subtitles.length,
+                  streamIndex: s.index,
+                  codec: s.codec_name,
+                  language: langCode || 'en',
+                  title: streamTitle,
+                  label
+                });
+              }
+            }
+
+            resolve({ audioTracks, subtitles, video });
+          } catch (e) {
+            resolve({ audioTracks: [], subtitles: [], video: null });
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Retrieves full media info (duration, audio tracks, subtitles) with caching.
+   */
+  async getMediaInfo(filePath) {
+    try {
+      const stat = fs.statSync(filePath);
+      const cacheKey = `${filePath}::${stat.size}::${stat.mtimeMs}`;
+      const cached = this.cache[cacheKey];
+
+      if (cached && cached.audioTracks && cached.subtitles && typeof cached.duration === 'number') {
+        return cached;
+      }
+
+      const duration = await this.getVideoDuration(filePath);
+      const streams = await this.getMediaStreams(filePath);
+
+      const ext = path.extname(filePath).toLowerCase();
+      const isMkv = ext === '.mkv';
+      const hasAc3OrDts = streams.audioTracks.some(a => ['ac3', 'eac3', 'dts', 'truehd'].includes(a.codec?.toLowerCase()));
+
+      const info = {
+        duration,
+        audioTracks: streams.audioTracks,
+        subtitles: streams.subtitles,
+        video: streams.video,
+        isMkv,
+        needsRemux: isMkv || hasAc3OrDts,
+        size: stat.size,
+        updatedAt: Date.now()
+      };
+
+      this.cache[cacheKey] = { ...this.cache[cacheKey], ...info };
+      this.saveCache();
+
+      return info;
+    } catch (err) {
+      return { duration: 0, audioTracks: [], subtitles: [], video: null, isMkv: false, needsRemux: false };
+    }
+  }
+
+  /**
    * Retrieves duration in seconds for a given video file.
    * Uses caching based on file path, mtime, and size.
    */
@@ -74,20 +214,26 @@ class MetadataService {
       }
 
       let duration = 0;
+      const isMkv = filePath.toLowerCase().endsWith('.mkv');
 
-      // 1. Try fast pure-JS music-metadata
-      try {
-        const metadata = await mm.parseFile(filePath, { duration: true, skipCovers: true });
-        if (metadata && metadata.format && metadata.format.duration) {
-          duration = Math.round(metadata.format.duration);
-        }
-      } catch (mmErr) {
-        // Fallback to ffprobe
-      }
-
-      // 2. Fallback to ffprobe if duration couldn't be determined
-      if (!duration || duration <= 0) {
+      // For MKV files, use fast ffprobe directly (avoids music-metadata stalling on EBML attachments)
+      if (isMkv) {
         duration = await this._probeWithFfprobe(filePath);
+      } else {
+        // 1. Try fast pure-JS music-metadata for MP4/WebM
+        try {
+          const metadata = await mm.parseFile(filePath, { duration: true, skipCovers: true });
+          if (metadata && metadata.format && metadata.format.duration) {
+            duration = Math.round(metadata.format.duration);
+          }
+        } catch (mmErr) {
+          // Fallback to ffprobe
+        }
+
+        // 2. Fallback to ffprobe if duration couldn't be determined
+        if (!duration || duration <= 0) {
+          duration = await this._probeWithFfprobe(filePath);
+        }
       }
 
       // Cache result

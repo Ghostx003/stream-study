@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { getLanAddresses, checkCandidatePorts, getTailscaleIp } from './network.js';
 import { configManager } from './configManager.js';
 import { scanFolder, resolveSecurePath, generateLectureKey } from './scanner.js';
-import { streamVideoFile, serveSubtitleFile } from './streamer.js';
+import { streamVideoFile, serveSubtitleFile, streamRemuxFile, serveEmbeddedSubtitle } from './streamer.js';
 import { metadataService } from './metadata.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -194,7 +194,7 @@ app.get('/api/scan', async (req, res) => {
   }
 });
 
-// 5. Video streaming endpoint with HTTP byte range
+// 5. Video streaming endpoint with HTTP byte range & on-the-fly FFmpeg remuxing
 app.all('/api/stream', (req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return res.status(405).send('Method Not Allowed');
@@ -225,9 +225,81 @@ app.all('/api/stream', (req, res) => {
 
   try {
     const secureFilePath = resolveSecurePath(targetRoot.path, relativeFilePath);
-    streamVideoFile(req, res, secureFilePath);
+    const ext = path.extname(secureFilePath).toLowerCase();
+    const isMkv = ext === '.mkv';
+    const forceRemux = req.query.remux === '1' || req.query.remux === 'true';
+    const forceDirect = req.query.direct === '1' || req.query.direct === 'true';
+    const audioIdx = req.query.audio !== undefined && req.query.audio !== '' ? parseInt(req.query.audio, 10) : null;
+    const startTime = req.query.startTime !== undefined && req.query.startTime !== '' ? parseFloat(req.query.startTime) : null;
+
+    if (!forceDirect && (forceRemux || isMkv || (audioIdx !== null && !isNaN(audioIdx)) || (startTime !== null && !isNaN(startTime)))) {
+      streamRemuxFile(req, res, secureFilePath, {
+        startTime: startTime || 0,
+        audioStreamIndex: audioIdx !== null && !isNaN(audioIdx) ? audioIdx : undefined
+      });
+    } else {
+      streamVideoFile(req, res, secureFilePath);
+    }
   } catch (err) {
     res.status(403).json({ error: err.message });
+  }
+});
+
+// 5b. Media Tracks Discovery (Audio & Embedded Subtitles)
+app.get('/api/media/tracks', async (req, res) => {
+  const { key } = req.query;
+  if (!key) return res.status(400).json({ error: 'Missing lecture key' });
+
+  const parts = key.split('::');
+  if (parts.length < 2) return res.status(400).json({ error: 'Invalid lecture key' });
+
+  const root = configManager.getRoots().find(r => r.id === parts[0]);
+  if (!root) return res.status(404).json({ error: 'Media root not found' });
+
+  try {
+    const relativeFilePath = parts.slice(1).join('::');
+    const secureFilePath = resolveSecurePath(root.path, relativeFilePath);
+    const mediaInfo = await metadataService.getMediaInfo(secureFilePath);
+
+    // Format embedded subtitles with stream endpoint
+    const embeddedSubtitles = (mediaInfo.subtitles || []).map(s => ({
+      id: `embedded_${s.streamIndex}`,
+      isEmbedded: true,
+      streamIndex: s.streamIndex,
+      label: s.label,
+      srclang: s.language || 'en',
+      src: `/api/subtitles/embedded?key=${encodeURIComponent(key)}&streamIndex=${s.streamIndex}`
+    }));
+
+    res.json({
+      duration: mediaInfo.duration,
+      isMkv: mediaInfo.isMkv,
+      needsRemux: mediaInfo.needsRemux,
+      audioTracks: mediaInfo.audioTracks || [],
+      subtitles: embeddedSubtitles
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Embedded subtitle delivery endpoint
+app.get('/api/subtitles/embedded', (req, res) => {
+  const { key, streamIndex } = req.query;
+  if (!key || streamIndex === undefined) return res.status(400).send('Missing key or streamIndex');
+
+  const parts = key.split('::');
+  if (parts.length < 2) return res.status(400).send('Invalid lecture key');
+
+  const root = configManager.getRoots().find(r => r.id === parts[0]);
+  if (!root) return res.status(404).send('Media root not found');
+
+  try {
+    const relativeFilePath = parts.slice(1).join('::');
+    const secureFilePath = resolveSecurePath(root.path, relativeFilePath);
+    serveEmbeddedSubtitle(req, res, secureFilePath, streamIndex);
+  } catch (err) {
+    res.status(403).send('Forbidden: Access denied');
   }
 });
 

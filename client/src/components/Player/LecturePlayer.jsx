@@ -25,6 +25,15 @@ export default function LecturePlayer({
   const resumeTimeRef = useRef(lecture.currentTime || 0);
   const lastSaveRef = useRef(0);
 
+  // MKV / Remux stream state & refs
+  const isMkv = !!(lecture.fileName?.toLowerCase().endsWith('.mkv') || lecture.isMkv);
+  const streamStartTimeRef = useRef(lecture.currentTime || 0);
+  const selectedAudioStreamIndexRef = useRef(null);
+
+  // Pinch-to-zoom seeking lock refs
+  const isPinchingRef = useRef(false);
+  const lastPinchTimeRef = useRef(0);
+
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(lecture.currentTime || 0);
@@ -77,6 +86,35 @@ export default function LecturePlayer({
   // Fullscreen state
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Immersive Fullscreen (Hides Android status bar and navigation bar)
+  const requestImmersiveFullscreen = useCallback(async () => {
+    try {
+      const el = containerRef.current || document.documentElement;
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (el.requestFullscreen) {
+          await el.requestFullscreen({ navigationUI: 'hide' });
+        } else if (el.webkitRequestFullscreen) {
+          await el.webkitRequestFullscreen();
+        }
+      }
+      if (window.screen?.orientation?.lock) {
+        window.screen.orientation.lock('landscape').catch(() => {});
+      }
+    } catch (e) {}
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      requestImmersiveFullscreen();
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen().catch(() => {});
+      }
+    }
+  }, [requestImmersiveFullscreen]);
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement || !!document.webkitFullscreenElement);
@@ -122,8 +160,37 @@ export default function LecturePlayer({
     });
   }, [showAspectHud]);
 
-  // Stream URL
-  const streamUrl = api.getVideoStreamUrl(lecture.id);
+  // Master Seek Handler (Supports both standard Range seek and MKV on-the-fly keyframe seek)
+  const seekTo = useCallback((targetTime) => {
+    const dur = duration || (videoRef.current ? videoRef.current.duration : 0) || 0;
+    const clamped = Math.max(0, Math.min(dur || 999999, targetTime));
+    if (isMkv) {
+      streamStartTimeRef.current = clamped;
+      setCurrentTime(clamped);
+      if (videoRef.current) {
+        const newSrc = api.getVideoStreamUrl(lecture.id, {
+          startTime: clamped,
+          audio: selectedAudioStreamIndexRef.current,
+          remux: true
+        });
+        videoRef.current.src = newSrc;
+        videoRef.current.load();
+        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+      }
+    } else {
+      if (videoRef.current) {
+        videoRef.current.currentTime = clamped;
+      }
+      setCurrentTime(clamped);
+    }
+    api.updateProgress(lecture.id, { currentTime: clamped, duration: dur }).catch(() => {});
+    onUpdateLectureProgress?.(lecture.id, { currentTime: clamped });
+  }, [isMkv, duration, lecture.id, onUpdateLectureProgress]);
+
+  // Stream URL initialization (includes startTime for MKV if resuming)
+  const streamUrl = isMkv && resumeTimeRef.current > 1
+    ? api.getVideoStreamUrl(lecture.id, { startTime: resumeTimeRef.current, remux: true })
+    : api.getVideoStreamUrl(lecture.id);
 
   // Initialize playback rate and settings from server
   useEffect(() => {
@@ -162,11 +229,34 @@ export default function LecturePlayer({
         const serverTime = prog.currentTime;
         resumeTimeRef.current = serverTime;
         setCurrentTime(serverTime);
-        if (videoRef.current && videoRef.current.readyState >= 1) {
+        if (isMkv) {
+          streamStartTimeRef.current = serverTime;
+        } else if (videoRef.current && videoRef.current.readyState >= 1) {
           if (Math.abs(videoRef.current.currentTime - serverTime) > 1 && serverTime > 0) {
             videoRef.current.currentTime = serverTime;
           }
         }
+      }
+    }).catch(() => {});
+
+    // Query media streams (audio tracks, embedded subtitles)
+    api.getMediaTracks(lecture.id).then((info) => {
+      if (!isMounted || !info) return;
+      if (info.audioTracks && info.audioTracks.length > 0) {
+        setAvailableAudioTracks(info.audioTracks);
+        // Default to first audio track (prefer AAC for instant browser decode if available)
+        const aacTrack = info.audioTracks.find(a => a.codec?.toLowerCase() === 'aac') || info.audioTracks[0];
+        setSelectedAudioTrack(aacTrack.index);
+        selectedAudioStreamIndexRef.current = aacTrack.streamIndex;
+      }
+      if (info.subtitles && info.subtitles.length > 0) {
+        setAvailableSubtitles(prev => {
+          const folderSubs = lecture.subtitles || [];
+          return [...info.subtitles, ...folderSubs];
+        });
+      }
+      if (info.duration && !duration) {
+        setDuration(info.duration);
       }
     }).catch(() => {});
 
@@ -211,6 +301,11 @@ export default function LecturePlayer({
 
   // Master tap/click handler for viewport and screen
   const handleViewportTap = useCallback((e) => {
+    // Attempt immersive fullscreen on mobile to eliminate Android status bar & notch bar
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      requestImmersiveFullscreen();
+    }
+
     // If the tap was directly on an interactive button, input, or drawer, do not toggle controls
     if (
       e?.target?.closest?.('button') ||
@@ -287,10 +382,10 @@ export default function LecturePlayer({
   // Seek relative seconds with icon animation
   const seekRelative = useCallback((seconds) => {
     if (!videoRef.current || isLocked) return;
-    const dur = videoRef.current.duration || duration || 0;
-    const newTime = Math.max(0, Math.min(dur, videoRef.current.currentTime + seconds));
-    videoRef.current.currentTime = newTime;
-    setCurrentTime(newTime);
+    const dur = duration || (videoRef.current ? videoRef.current.duration : 0) || 0;
+    const cur = isMkv ? streamStartTimeRef.current + videoRef.current.currentTime : videoRef.current.currentTime;
+    const newTime = Math.max(0, Math.min(dur, cur + seconds));
+    seekTo(newTime);
     if (seconds > 0) {
       setRightSeekActive(true);
       setTimeout(() => setRightSeekActive(false), 550);
@@ -299,7 +394,7 @@ export default function LecturePlayer({
       setTimeout(() => setLeftSeekActive(false), 550);
     }
     resetControlsTimeout();
-  }, [isLocked, duration, resetControlsTimeout]);
+  }, [isLocked, duration, isMkv, seekTo, resetControlsTimeout]);
 
   // Change playback speed
   const changeSpeed = useCallback((newSpeed) => {
@@ -310,24 +405,6 @@ export default function LecturePlayer({
     }
     showToast?.(`Speed: ${clamped}x`);
   }, [showToast]);
-
-  // Fullscreen
-  const toggleFullscreen = useCallback(() => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      if (containerRef.current.requestFullscreen) {
-        containerRef.current.requestFullscreen().catch(() => {});
-      } else if (containerRef.current.webkitRequestFullscreen) {
-        containerRef.current.webkitRequestFullscreen().catch(() => {});
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen().catch(() => {});
-      }
-    }
-  }, []);
 
   // Bookmarks / Moments handling
   const handleAddBookmark = useCallback(async () => {
@@ -405,7 +482,7 @@ export default function LecturePlayer({
   }, [lecture.id, onBackToFolder, onUpdateLectureProgress]);
 
   // ==========================================
-  // TOUCH GESTURES (Brightness, Volume, Slide Seek)
+  // TOUCH GESTURES (Brightness, Volume, Slide Seek, Pinch Zoom)
   // ==========================================
   const handleTouchStart = (e) => {
     if (isLocked) {
@@ -415,8 +492,13 @@ export default function LecturePlayer({
       return;
     }
 
-    if (e.touches.length === 2) {
-      // Pinch to Zoom gesture init
+    if (e.touches.length >= 2) {
+      // 2-finger pinch gesture init - lock out all seeking immediately
+      isPinchingRef.current = true;
+      lastPinchTimeRef.current = Date.now();
+      setSlideSeek({ active: false, delta: 0, targetTime: 0 });
+      touchStartRef.current.moved = true;
+
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -425,6 +507,11 @@ export default function LecturePlayer({
     }
 
     if (e.touches.length === 1 && videoWrapperRef.current) {
+      // If we recently completed a pinch, ignore new single touch for 650ms to prevent accidental seeks
+      if (isPinchingRef.current || Date.now() - lastPinchTimeRef.current < 650) {
+        return;
+      }
+
       const t = e.touches[0];
       const rect = videoWrapperRef.current.getBoundingClientRect();
       const relX = t.clientX - rect.left;
@@ -437,7 +524,9 @@ export default function LecturePlayer({
         time: Date.now(),
         startVolume: videoRef.current ? videoRef.current.volume : volume,
         startBrightness: brightness,
-        startTime: videoRef.current ? videoRef.current.currentTime : currentTime,
+        startTime: isMkv
+          ? streamStartTimeRef.current + (videoRef.current ? videoRef.current.currentTime : 0)
+          : (videoRef.current ? videoRef.current.currentTime : currentTime),
         isLeftSide,
         isRightSide,
         isVertical: null,
@@ -450,22 +539,34 @@ export default function LecturePlayer({
     if (isLocked || !videoWrapperRef.current) return;
 
     // Handle 2-finger pinch gesture (Pinch in -> Fit, Pinch out -> Fill)
-    if (e.touches.length === 2 && pinchStartRef.current && !pinchStartRef.current.triggered) {
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
-      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-      const ratio = dist / pinchStartRef.current.dist;
-      if (ratio > 1.25) {
-        pinchStartRef.current.triggered = true;
-        setAspectMode('fill');
-        localStorage.setItem('courseflix_aspect_ratio', 'fill');
-        showAspectHud('Fill (Covering Notch)');
-      } else if (ratio < 0.78) {
-        pinchStartRef.current.triggered = true;
-        setAspectMode('fit');
-        localStorage.setItem('courseflix_aspect_ratio', 'fit');
-        showAspectHud('Fit (Original)');
+    if (e.touches.length >= 2) {
+      isPinchingRef.current = true;
+      lastPinchTimeRef.current = Date.now();
+      setSlideSeek({ active: false, delta: 0, targetTime: 0 });
+
+      if (pinchStartRef.current && !pinchStartRef.current.triggered) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        const ratio = dist / pinchStartRef.current.dist;
+        if (ratio > 1.15) {
+          pinchStartRef.current.triggered = true;
+          setAspectMode('fill');
+          localStorage.setItem('courseflix_aspect_ratio', 'fill');
+          showAspectHud('Fill (Covering Notch)');
+        } else if (ratio < 0.85) {
+          pinchStartRef.current.triggered = true;
+          setAspectMode('fit');
+          localStorage.setItem('courseflix_aspect_ratio', 'fit');
+          showAspectHud('Fit (Original)');
+        }
       }
+      return;
+    }
+
+    // Lockout 1-finger gestures during or shortly after a pinch
+    if (isPinchingRef.current || Date.now() - lastPinchTimeRef.current < 650) {
+      setSlideSeek({ active: false, delta: 0, targetTime: 0 });
       return;
     }
 
@@ -487,13 +588,11 @@ export default function LecturePlayer({
       const deltaRatio = -dy / (rect.height * 0.55);
 
       if (start.isLeftSide) {
-        // Brightness control (0.25 to 1.5)
         const newBright = Math.max(0.25, Math.min(1.5, start.startBrightness + deltaRatio));
         setBrightness(newBright);
         setShowBrightnessSlider(true);
         setShowVolumeSlider(false);
       } else if (start.isRightSide) {
-        // Volume control (0.0 to 1.0)
         const newVol = Math.max(0, Math.min(1.0, start.startVolume + deltaRatio));
         setVolume(newVol);
         if (videoRef.current) {
@@ -520,16 +619,31 @@ export default function LecturePlayer({
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e) => {
     pinchStartRef.current = null;
     if (isLocked) return;
+
+    if (e && e.touches && e.touches.length >= 1) {
+      // Partial lift off during pinch - maintain pinch lockout!
+      isPinchingRef.current = true;
+      lastPinchTimeRef.current = Date.now();
+      setSlideSeek({ active: false, delta: 0, targetTime: 0 });
+      return;
+    }
+
+    if (isPinchingRef.current || Date.now() - lastPinchTimeRef.current < 650) {
+      isPinchingRef.current = false;
+      lastPinchTimeRef.current = Date.now();
+      setSlideSeek({ active: false, delta: 0, targetTime: 0 });
+      return;
+    }
+
     const start = touchStartRef.current;
 
     // Apply slide seek if active
     if (slideSeek.active) {
-      if (videoRef.current && typeof slideSeek.targetTime === 'number') {
-        videoRef.current.currentTime = slideSeek.targetTime;
-        setCurrentTime(slideSeek.targetTime);
+      if (typeof slideSeek.targetTime === 'number') {
+        seekTo(slideSeek.targetTime);
       }
       setSlideSeek({ active: false, delta: 0, targetTime: 0 });
     }
@@ -569,10 +683,8 @@ export default function LecturePlayer({
       } else {
         lastTapRef.current = { time: now, x: start.x };
         if (isHideControls) {
-          // If controls are hidden: instant reveal with 0ms delay!
           handleViewportTap(e);
         } else {
-          // If controls are visible: short 180ms delay to check for double tap before hiding
           if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
           singleTapTimerRef.current = setTimeout(() => {
             handleViewportTap(e);
@@ -586,8 +698,9 @@ export default function LecturePlayer({
   // Video element events
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
-    const cur = videoRef.current.currentTime;
+    const rawCur = videoRef.current.currentTime;
     const dur = videoRef.current.duration || duration || 0;
+    const cur = isMkv ? streamStartTimeRef.current + rawCur : rawCur;
     setCurrentTime(cur);
 
     if (cur <= 25 && dur > 25) {
@@ -608,7 +721,7 @@ export default function LecturePlayer({
   const handleLoadedMetadata = () => {
     if (!videoRef.current) return;
     const metaDur = Math.round(videoRef.current.duration || 0);
-    if (metaDur > 0) {
+    if (metaDur > 0 && !isMkv) {
       setDuration(metaDur);
       if (!lecture.duration || Math.abs(lecture.duration - metaDur) > 2) {
         api.reportDuration(lecture.id, metaDur).catch(() => {});
@@ -617,29 +730,34 @@ export default function LecturePlayer({
 
     videoRef.current.playbackRate = playbackRate;
 
-    // Detect browser native audio tracks if exposed
-    if (videoRef.current.audioTracks && videoRef.current.audioTracks.length > 0) {
-      const tracks = [];
-      for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
-        const at = videoRef.current.audioTracks[i];
-        tracks.push({
-          id: i,
-          label: at.label || `Audio Track ${i + 1} (${at.language || 'Default'})`,
-          language: at.language
-        });
+    // Detect browser native audio tracks if exposed and we don't have tracks from server
+    if (availableAudioTracks.length === 0) {
+      if (videoRef.current.audioTracks && videoRef.current.audioTracks.length > 0) {
+        const tracks = [];
+        for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
+          const at = videoRef.current.audioTracks[i];
+          tracks.push({
+            id: i,
+            streamIndex: i,
+            label: at.label || `Audio Track ${i + 1} (${at.language || 'Default'})`,
+            language: at.language
+          });
+        }
+        setAvailableAudioTracks(tracks);
+      } else {
+        setAvailableAudioTracks([
+          { id: 0, streamIndex: 0, label: 'Default / Stereo Audio', language: 'default' }
+        ]);
       }
-      setAvailableAudioTracks(tracks);
-    } else {
-      setAvailableAudioTracks([
-        { id: 0, label: 'Default / Stereo Audio', language: 'default' }
-      ]);
     }
 
-    // Resume from where left off
-    const targetTime = resumeTimeRef.current || lecture.currentTime || 0;
-    if (targetTime > 1 && targetTime < (metaDur || 999999) - 3) {
-      videoRef.current.currentTime = targetTime;
-      setCurrentTime(targetTime);
+    // Resume from where left off (if not MKV where startTime was already passed)
+    if (!isMkv) {
+      const targetTime = resumeTimeRef.current || lecture.currentTime || 0;
+      if (targetTime > 1 && targetTime < (metaDur || 999999) - 3) {
+        videoRef.current.currentTime = targetTime;
+        setCurrentTime(targetTime);
+      }
     }
 
     videoRef.current.play().then(() => {
@@ -656,12 +774,12 @@ export default function LecturePlayer({
 
   const handlePause = () => {
     setIsPlaying(false);
-    if (videoRef.current && videoRef.current.currentTime > 0) {
+    if (videoRef.current && currentTime > 0) {
       api.updateProgress(lecture.id, {
-        currentTime: videoRef.current.currentTime,
+        currentTime: currentTime,
         duration: videoRef.current.duration || duration || 0
       }).catch(() => {});
-      onUpdateLectureProgress?.(lecture.id, { currentTime: videoRef.current.currentTime });
+      onUpdateLectureProgress?.(lecture.id, { currentTime });
     }
   };
 
@@ -676,18 +794,14 @@ export default function LecturePlayer({
   const handleTimelineInput = (e) => {
     const val = parseFloat(e.target.value);
     setCurrentTime(val);
-    if (videoRef.current) {
+    if (!isMkv && videoRef.current) {
       videoRef.current.currentTime = val;
     }
   };
 
   const handleTimelineChange = (e) => {
     const val = parseFloat(e.target.value);
-    if (videoRef.current) {
-      videoRef.current.currentTime = val;
-    }
-    api.updateProgress(lecture.id, { currentTime: val, duration: duration || 0 }).catch(() => {});
-    onUpdateLectureProgress?.(lecture.id, { currentTime: val });
+    seekTo(val);
   };
 
   // Calculate duration formats
@@ -749,6 +863,7 @@ export default function LecturePlayer({
           className={`netflix-video-element aspect-${aspectMode}`}
           autoPlay
           playsInline
+          crossOrigin="anonymous"
           style={{
             filter: `brightness(${brightness})`,
             objectFit: aspectMode === 'fit' ? 'contain' : aspectMode === 'fill' ? 'cover' : aspectMode === 'stretch' ? 'fill' : 'cover',
@@ -1310,7 +1425,20 @@ export default function LecturePlayer({
                         className={`column-option-row ${selectedAudioTrack === at.id ? 'selected' : ''}`}
                         onClick={() => {
                           setSelectedAudioTrack(at.id);
-                          if (videoRef.current && videoRef.current.audioTracks) {
+                          selectedAudioStreamIndexRef.current = at.streamIndex;
+                          if (isMkv) {
+                            const cur = currentTime;
+                            streamStartTimeRef.current = cur;
+                            if (videoRef.current) {
+                              videoRef.current.src = api.getVideoStreamUrl(lecture.id, {
+                                startTime: cur,
+                                audio: at.streamIndex,
+                                remux: true
+                              });
+                              videoRef.current.load();
+                              videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+                            }
+                          } else if (videoRef.current && videoRef.current.audioTracks) {
                             for (let i = 0; i < videoRef.current.audioTracks.length; i++) {
                               videoRef.current.audioTracks[i].enabled = (i === at.id);
                             }

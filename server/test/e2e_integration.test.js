@@ -11,10 +11,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const TEST_LECTURES_DIR = path.resolve(__dirname, '../../test-lectures');
 
+// Ensure mock fixtures exist for e2e testing
+function ensureFixtures() {
+  if (!fs.existsSync(TEST_LECTURES_DIR)) {
+    fs.mkdirSync(path.join(TEST_LECTURES_DIR, 'Mathematics/Calculus'), { recursive: true });
+    fs.mkdirSync(path.join(TEST_LECTURES_DIR, 'Mathematics/Linear Algebra'), { recursive: true });
+    fs.mkdirSync(path.join(TEST_LECTURES_DIR, 'Computer Networks'), { recursive: true });
+  }
+  fs.writeFileSync(path.join(TEST_LECTURES_DIR, 'Overview.mp4'), Buffer.alloc(4096));
+  fs.writeFileSync(path.join(TEST_LECTURES_DIR, 'Mathematics/Calculus/Lecture 1 - Limits.mp4'), Buffer.alloc(4096));
+  fs.writeFileSync(path.join(TEST_LECTURES_DIR, 'Mathematics/Calculus/Lecture 2 - Derivatives.mp4'), Buffer.alloc(4096));
+  fs.writeFileSync(path.join(TEST_LECTURES_DIR, 'Mathematics/Calculus/Lecture 10 - Integration.mp4'), Buffer.alloc(4096));
+}
+ensureFixtures();
+
 test('Complete Courseflix LAN End-to-End System Integration', async (t) => {
-  const testPort = 5995;
+  const testPort = 5800 + Math.floor(Math.random() * 1500);
   const { server } = await startServer(testPort);
   const baseUrl = `http://localhost:${testPort}`;
+  let rootId = null;
 
   try {
     // 1. Verify network endpoint
@@ -29,7 +44,6 @@ test('Complete Courseflix LAN End-to-End System Integration', async (t) => {
     });
 
     // 2. Folder registration and persistence
-    let rootId = null;
     await t.test('POST /api/roots registers the lecture directory', async () => {
       const res = await fetch(`${baseUrl}/api/roots`, {
         method: 'POST',
