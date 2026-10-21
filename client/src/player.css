@@ -42,12 +42,15 @@
 .netflix-player-root.sidebar-open .netflix-video-viewport {
   width: calc(100% - 360px);
   max-width: calc(100% - 360px);
+  padding: 16px;
+  box-sizing: border-box;
 }
 
 @media (max-width: 1024px) {
   .netflix-player-root.sidebar-open .netflix-video-viewport {
     width: calc(100% - 300px);
     max-width: calc(100% - 300px);
+    padding: 12px;
   }
 }
 
@@ -55,7 +58,19 @@
   .netflix-player-root.sidebar-open .netflix-video-viewport {
     width: calc(100% - 250px);
     max-width: calc(100% - 250px);
+    padding: 8px;
   }
+}
+
+.netflix-player-root.sidebar-open .netflix-video-element {
+  object-fit: contain !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  transform: scale(0.92) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9) !important;
 }
 
 .netflix-video-element {
@@ -63,7 +78,7 @@
   height: 100%;
   object-fit: contain;
   background-color: #000;
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-radius 0.3s ease, box-shadow 0.3s ease;
 }
 
 /* Aspect Ratio / Screen-Fit Mode Styles */
@@ -74,15 +89,11 @@
   object-fit: cover !important;
   width: 100% !important;
   height: 100% !important;
-  min-width: 100vw !important;
-  min-height: 100vh !important;
 }
 .netflix-video-element.aspect-stretch {
   object-fit: fill !important;
   width: 100% !important;
   height: 100% !important;
-  min-width: 100vw !important;
-  min-height: 100vh !important;
 }
 .netflix-video-element.aspect-zoom {
   object-fit: cover !important;

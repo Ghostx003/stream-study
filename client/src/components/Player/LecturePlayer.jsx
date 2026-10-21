@@ -1304,11 +1304,13 @@ export default function LecturePlayer({
           crossOrigin="anonymous"
           style={{
             filter: `brightness(${brightness})`,
-            objectFit: aspectMode === 'fit' ? 'contain' : aspectMode === 'fill' ? 'cover' : aspectMode === 'stretch' ? 'fill' : 'cover',
-            transform: aspectMode === 'zoom' ? 'scale(1.22)' : 'none',
+            objectFit: activeDrawer === 'episodes' ? 'contain' : (aspectMode === 'fit' ? 'contain' : aspectMode === 'fill' ? 'cover' : aspectMode === 'stretch' ? 'fill' : 'cover'),
+            transform: activeDrawer === 'episodes' ? 'scale(0.92)' : (aspectMode === 'zoom' ? 'scale(1.22)' : 'none'),
             width: '100%',
             height: '100%',
-            transition: 'transform 0.2s ease, object-fit 0.2s ease'
+            borderRadius: activeDrawer === 'episodes' ? '12px' : '0px',
+            boxShadow: activeDrawer === 'episodes' ? '0 12px 48px rgba(0, 0, 0, 0.9)' : 'none',
+            transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), object-fit 0.3s ease, border-radius 0.3s ease, box-shadow 0.3s ease'
           }}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
