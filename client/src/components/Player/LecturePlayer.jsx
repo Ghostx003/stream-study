@@ -896,12 +896,10 @@ export default function LecturePlayer({
           pinchStartRef.current.triggered = true;
           setAspectMode('fill');
           localStorage.setItem('courseflix_aspect_ratio', 'fill');
-          showAspectHud('Fill (Covering Notch)');
         } else if (ratio < 0.85) {
           pinchStartRef.current.triggered = true;
           setAspectMode('fit');
           localStorage.setItem('courseflix_aspect_ratio', 'fit');
-          showAspectHud('Fit (Original)');
         }
       }
       return;
