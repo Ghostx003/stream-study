@@ -117,6 +117,46 @@ export default function LecturePlayer({
   const touchStartRef = useRef({ x: 0, y: 0, time: 0, isVertical: null, moved: false });
   const sliderFadeTimerRef = useRef(null);
 
+  // Netflix Bottom Drawers ('moments' | 'speed' | 'episodes' | 'audioSub' | null)
+  const [activeDrawer, setActiveDrawer] = useState(null);
+
+  // Subtitles & Audio Tracks
+  const [availableSubtitles, setAvailableSubtitles] = useState(lecture.subtitles || []);
+  const [selectedSubtitle, setSelectedSubtitle] = useState(null);
+  const [subFontSize, setSubFontSize] = useState(() => {
+    return localStorage.getItem('courseflix_sub_fontsize') || 'lg';
+  });
+  const [subFontId, setSubFontId] = useState(() => {
+    return localStorage.getItem('courseflix_sub_font') || 'comic';
+  });
+  const [subVerticalOffset, setSubVerticalOffset] = useState(() => {
+    const saved = localStorage.getItem('courseflix_sub_offset');
+    const val = saved !== null && !isNaN(parseInt(saved, 10)) ? parseInt(saved, 10) : 5;
+    return Math.max(3, Math.min(17, val));
+  });
+  const activeSubFont = SUB_FONT_OPTIONS.find(f => f.id === subFontId) || SUB_FONT_OPTIONS[0];
+  const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
+  const [selectedAudioTrack, setSelectedAudioTrack] = useState(0);
+
+  // Bookmarks & Overlays
+  const [bookmarks, setBookmarks] = useState(lecture.bookmarks || []);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showSkipIntro, setShowSkipIntro] = useState(false);
+  const [leftSeekActive, setLeftSeekActive] = useState(false);
+  const [rightSeekActive, setRightSeekActive] = useState(false);
+
+  // Brown noise state
+  const [brownNoiseActive, setBrownNoiseActive] = useState(false);
+  const [brownNoiseVolume, setBrownNoiseVolume] = useState(0.2);
+
+  // Bookmark cycling state
+  const savedTimelinePosRef = useRef(null);
+  const isCyclingRef = useRef(false);
+  const lastTapRef = useRef({ time: 0, x: 0 });
+
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   // Web Audio API Extra Volume Boost (up to 200%)
   const audioCtxRef = useRef(null);
   const videoGainRef = useRef(null);
@@ -191,46 +231,6 @@ export default function LecturePlayer({
       showToast?.(`Volume: ${Math.round(clamped * 100)}% (Extra Boost)`);
     }
   }, [selectedAudioTrack, isMuted, initAudioGain, showToast]);
-
-  // Netflix Bottom Drawers ('moments' | 'speed' | 'episodes' | 'audioSub' | null)
-  const [activeDrawer, setActiveDrawer] = useState(null);
-
-  // Subtitles & Audio Tracks
-  const [availableSubtitles, setAvailableSubtitles] = useState(lecture.subtitles || []);
-  const [selectedSubtitle, setSelectedSubtitle] = useState(null);
-  const [subFontSize, setSubFontSize] = useState(() => {
-    return localStorage.getItem('courseflix_sub_fontsize') || 'lg';
-  });
-  const [subFontId, setSubFontId] = useState(() => {
-    return localStorage.getItem('courseflix_sub_font') || 'comic';
-  });
-  const [subVerticalOffset, setSubVerticalOffset] = useState(() => {
-    const saved = localStorage.getItem('courseflix_sub_offset');
-    const val = saved !== null && !isNaN(parseInt(saved, 10)) ? parseInt(saved, 10) : 5;
-    return Math.max(3, Math.min(17, val));
-  });
-  const activeSubFont = SUB_FONT_OPTIONS.find(f => f.id === subFontId) || SUB_FONT_OPTIONS[0];
-  const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
-  const [selectedAudioTrack, setSelectedAudioTrack] = useState(0);
-
-  // Bookmarks & Overlays
-  const [bookmarks, setBookmarks] = useState(lecture.bookmarks || []);
-  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [showSkipIntro, setShowSkipIntro] = useState(false);
-  const [leftSeekActive, setLeftSeekActive] = useState(false);
-  const [rightSeekActive, setRightSeekActive] = useState(false);
-
-  // Brown noise state
-  const [brownNoiseActive, setBrownNoiseActive] = useState(false);
-  const [brownNoiseVolume, setBrownNoiseVolume] = useState(0.2);
-
-  // Bookmark cycling state
-  const savedTimelinePosRef = useRef(null);
-  const isCyclingRef = useRef(false);
-  const lastTapRef = useRef({ time: 0, x: 0 });
-
-  // Fullscreen state
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Immersive Fullscreen (Hides Android status bar and navigation bar)
   const requestImmersiveFullscreen = useCallback(async () => {
