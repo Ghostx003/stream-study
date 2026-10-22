@@ -634,9 +634,6 @@ export default function LecturePlayer({
     }
 
     if (isLocked) {
-      setShowUnlockPrompt(true);
-      if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
-      unlockTimeoutRef.current = setTimeout(() => setShowUnlockPrompt(false), 2500);
       return;
     }
 
@@ -810,9 +807,6 @@ export default function LecturePlayer({
   // ==========================================
   const handleTouchStart = (e) => {
     if (isLocked) {
-      setShowUnlockPrompt(true);
-      if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
-      unlockTimeoutRef.current = setTimeout(() => setShowUnlockPrompt(false), 3000);
       return;
     }
 
@@ -1726,22 +1720,20 @@ export default function LecturePlayer({
           </button>
         )}
 
-        {/* SCREEN LOCKED FLOATING UNLOCK PROMPT */}
+        {/* SCREEN LOCKED: Show locked button at bottom left */}
         {isLocked && (
-          <div className={`netflix-locked-overlay ${showUnlockPrompt ? 'active' : ''}`} onClick={(e) => e.stopPropagation()}>
-            <button
-              className="netflix-unlock-pill-btn"
-              onClick={() => {
-                setIsLocked(false);
-                setShowUnlockPrompt(false);
-                showToast?.('Screen Unlocked');
-              }}
-            >
-              <i className="fas fa-lock"></i>
-              <span>Screen Locked</span>
-              <span className="unlock-subtext">Tap to unlock</span>
-            </button>
-          </div>
+          <button
+            className="netflix-locked-corner-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsLocked(false);
+              showToast?.('Screen Unlocked');
+            }}
+            title="Screen Locked — Tap to unlock"
+          >
+            <i className="fas fa-lock"></i>
+            <span>Locked</span>
+          </button>
         )}
 
         {/* ==========================================
