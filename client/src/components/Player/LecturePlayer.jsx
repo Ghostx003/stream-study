@@ -1923,6 +1923,22 @@ export default function LecturePlayer({
                 </span>
               </div>
 
+              {/* Portrait-Only Top-Right Lock Button */}
+              <button
+                className="netflix-top-btn portrait-lock-btn"
+                onClick={() => {
+                  setIsLocked(true);
+                  setIsHideControls(true);
+                  showToast?.('Screen Locked. Tap unlock icon to restore.');
+                }}
+                title="Lock Screen"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </button>
+
               <div className="netflix-top-actions">
                 {/* CC / Subtitles Quick Cycle Button */}
                 <button
@@ -1937,6 +1953,7 @@ export default function LecturePlayer({
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                     <path d="M19 4H5c-1.11 0-2 .9-2 2v12a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6a2 2 0 0 0-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/>
                   </svg>
+                  <span className="top-action-chip-label">CC</span>
                 </button>
 
                 {/* Brown Noise */}
@@ -2186,7 +2203,10 @@ export default function LecturePlayer({
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M20 2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l4 4 4-4h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-9 10H7v-2h4v2zm6 0h-4v-2h4v2zm0-4H7V6h10v2z"/>
                   </svg>
-                  <span>Audio & Subtitles</span>
+                  <span>
+                    <span className="label-full">Audio & Subtitles</span>
+                    <span className="label-short">Audio & Subs</span>
+                  </span>
                 </button>
 
                 {/* 5. Prev Ep. */}

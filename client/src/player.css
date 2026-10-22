@@ -263,6 +263,22 @@ video::-webkit-media-text-track-container {
   transform: scale(0.92);
 }
 
+.portrait-lock-btn {
+  display: none !important;
+}
+
+.top-action-chip-label {
+  display: none;
+}
+
+.label-short {
+  display: none;
+}
+
+.label-full {
+  display: inline;
+}
+
 /* Aspect Ratio Pill Button */
 .netflix-top-btn.aspect-btn {
   background: rgba(255, 255, 255, 0.12);
@@ -1647,7 +1663,195 @@ video::-webkit-media-text-track-container {
 }
 
 /* Portrait Mode on Mobile Phones */
-@media (max-width: 600px) and (orientation: portrait) {
+@media (orientation: portrait) and (max-width: 768px), (max-width: 600px) and (orientation: portrait) {
+  .netflix-controls-layer {
+    padding: max(10px, env(safe-area-inset-top, 10px)) 16px max(10px, env(safe-area-inset-bottom, 10px)) 16px;
+  }
+
+  /* Two-row mobile top bar layout */
+  .netflix-top-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    row-gap: 8px;
+    height: auto;
+    min-height: auto;
+  }
+
+  /* Row 1: Back Button */
+  .netflix-top-bar .back-btn {
+    order: 1;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
+
+  /* Row 1: Title Info (Takes all remaining width between Back and Lock) */
+  .netflix-title-info {
+    order: 2;
+    position: static;
+    transform: none;
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    width: auto;
+    margin: 0 10px;
+    text-align: left;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 1px;
+    pointer-events: auto;
+  }
+
+  .netflix-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .netflix-ends-at-prefix {
+    font-size: 0.70rem;
+    color: #e50914;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .netflix-title-dot {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.68rem;
+    flex-shrink: 0;
+  }
+
+  .netflix-series-title {
+    font-size: 0.70rem;
+    color: #a3a3a3;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: none;
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .netflix-episode-title {
+    font-size: 0.90rem;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    text-align: left;
+    line-height: 1.25;
+  }
+
+  /* Row 1: Portrait Lock Button (Top-Right) */
+  .portrait-lock-btn {
+    order: 3;
+    display: flex !important;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  /* Row 2: Quick Action Chips Bar */
+  .netflix-top-actions {
+    order: 4;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 7px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 2px 0;
+    margin-top: 2px;
+  }
+  .netflix-top-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide duplicate lock button in Row 2 since it's prominent on Row 1 */
+  .netflix-top-actions .lock-btn {
+    display: none !important;
+  }
+
+  /* Style action buttons as sleek glassy chips */
+  .netflix-top-actions .netflix-top-btn {
+    width: auto;
+    min-width: 34px;
+    height: 30px;
+    padding: 0 10px;
+    border-radius: 15px;
+    background: rgba(24, 24, 28, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #ffffff;
+    flex-shrink: 0;
+  }
+
+  .netflix-top-actions .netflix-top-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .netflix-top-actions .netflix-top-btn i {
+    font-size: 0.85rem;
+  }
+
+  .netflix-top-actions .netflix-top-btn.aspect-btn {
+    padding: 0 8px;
+    height: 30px;
+  }
+  .netflix-top-actions .netflix-top-btn.aspect-btn .aspect-badge-text {
+    font-size: 0.68rem;
+  }
+
+  .top-action-chip-label {
+    display: inline;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  /* Center Controls */
   .netflix-center-controls {
     gap: 32px;
   }
@@ -1663,34 +1867,47 @@ video::-webkit-media-text-track-container {
     width: 44px;
     height: 44px;
   }
+
+  /* Bottom Controls & Action Bar */
   .netflix-action-bar {
     justify-content: space-between;
+    gap: 2px;
   }
   .netflix-bar-btn {
     flex-direction: column;
-    padding: 4px 2px;
+    padding: 4px 1px;
     gap: 3px;
-    font-size: 0.68rem;
+    font-size: 0.65rem;
+    flex: 1;
+    min-width: 0;
   }
   .netflix-bar-btn svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
   .netflix-bar-btn i {
-    font-size: 1rem;
+    font-size: 0.95rem;
   }
-  .netflix-title-info {
-    max-width: calc(100% - 240px);
+  .netflix-bar-btn span {
+    font-size: 0.60rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    display: block;
+    text-align: center;
+    letter-spacing: -0.2px;
   }
-  .netflix-series-title {
-    font-size: 0.65rem;
-    line-height: 1;
-  }
-  .netflix-episode-title {
-    font-size: 0.84rem;
-  }
+
   .netflix-audio-sub-columns {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+
+  .label-full {
+    display: none !important;
+  }
+  .label-short {
+    display: inline !important;
   }
 }
