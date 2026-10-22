@@ -351,21 +351,12 @@ export default function LecturePlayer({
     setSelectedAudioTrack(0);
 
     // Thoroughly flush and wipe old browser text tracks and cues
-    if (videoRef.current) {
-      const oldTracks = videoRef.current.querySelectorAll('track');
-      oldTracks.forEach(t => t.remove());
-      if (videoRef.current.textTracks) {
-        for (let i = 0; i < videoRef.current.textTracks.length; i++) {
-          try {
-            const track = videoRef.current.textTracks[i];
-            track.mode = 'disabled';
-            if (track.cues) {
-              for (let c = track.cues.length - 1; c >= 0; c--) {
-                track.removeCue(track.cues[c]);
-              }
-            }
-          } catch (e) {}
-        }
+    if (videoRef.current && videoRef.current.textTracks) {
+      for (let i = 0; i < videoRef.current.textTracks.length; i++) {
+        try {
+          const track = videoRef.current.textTracks[i];
+          track.mode = 'disabled';
+        } catch (e) {}
       }
     }
 
