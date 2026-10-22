@@ -1071,17 +1071,31 @@ export default function LecturePlayer({
       setShowSkipIntro(false);
     }
 
-    // Synchronize and drift check alternate audio track if active
+    // Smooth adaptive drift synchronization for alternate audio track (no choppy seeks during playback)
     if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && !videoRef.current.paused) {
-      if (Math.abs(altAudioRef.current.playbackRate - videoRef.current.playbackRate) > 0.01) {
-        altAudioRef.current.playbackRate = videoRef.current.playbackRate;
-      }
-      const diff = Math.abs(altAudioRef.current.currentTime - cur);
-      if (diff > 0.25) {
+      const vRate = videoRef.current.playbackRate;
+      const drift = altAudioRef.current.currentTime - cur; // positive: audio ahead, negative: audio behind
+
+      if (Math.abs(drift) > 1.2) {
+        // Massive desync (e.g. video buffer stall): hard sync
         try {
           altAudioRef.current.currentTime = cur;
         } catch {}
+        altAudioRef.current.playbackRate = vRate;
+      } else if (Math.abs(drift) > 0.07) {
+        // Smooth adaptive micro-nudge without stopping audio
+        const nudge = drift < 0 ? 1.04 : 0.96;
+        const targetRate = Math.round(vRate * nudge * 1000) / 1000;
+        if (Math.abs(altAudioRef.current.playbackRate - targetRate) > 0.005) {
+          altAudioRef.current.playbackRate = targetRate;
+        }
+      } else {
+        // In tight sync: maintain exact video playback rate
+        if (Math.abs(altAudioRef.current.playbackRate - vRate) > 0.005) {
+          altAudioRef.current.playbackRate = vRate;
+        }
       }
+
       if (altAudioRef.current.paused) {
         altAudioRef.current.play().catch(() => {});
       }
@@ -1106,12 +1120,18 @@ export default function LecturePlayer({
       videoRef.current.defaultPlaybackRate = playbackRate;
     }
     if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && videoRef.current) {
-      altAudioRef.current.playbackRate = videoRef.current.playbackRate;
-      altAudioRef.current.defaultPlaybackRate = videoRef.current.playbackRate;
-      try {
-        altAudioRef.current.currentTime = videoRef.current.currentTime;
-      } catch {}
-      altAudioRef.current.play().catch(() => {});
+      const vRate = videoRef.current.playbackRate;
+      altAudioRef.current.playbackRate = vRate;
+      altAudioRef.current.defaultPlaybackRate = vRate;
+      const curDiff = Math.abs(altAudioRef.current.currentTime - videoRef.current.currentTime);
+      if (curDiff > 0.8) {
+        try {
+          altAudioRef.current.currentTime = videoRef.current.currentTime;
+        } catch {}
+      }
+      if (altAudioRef.current.paused) {
+        altAudioRef.current.play().catch(() => {});
+      }
     }
     if (brownNoiseActive && brownNoiseRef.current && brownNoiseRef.current.paused) {
       brownNoiseRef.current.play().catch(() => {});
@@ -1162,9 +1182,11 @@ export default function LecturePlayer({
       videoRef.current.defaultPlaybackRate = playbackRate;
     }
     if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && videoRef.current) {
-      altAudioRef.current.playbackRate = videoRef.current.playbackRate;
-      altAudioRef.current.defaultPlaybackRate = videoRef.current.playbackRate;
-      if (Math.abs(altAudioRef.current.currentTime - videoRef.current.currentTime) > 0.2) {
+      const vRate = videoRef.current.playbackRate;
+      altAudioRef.current.playbackRate = vRate;
+      altAudioRef.current.defaultPlaybackRate = vRate;
+      const curDiff = Math.abs(altAudioRef.current.currentTime - videoRef.current.currentTime);
+      if (curDiff > 0.8) {
         try {
           altAudioRef.current.currentTime = videoRef.current.currentTime;
         } catch {}
@@ -1178,7 +1200,7 @@ export default function LecturePlayer({
   const handleRateChange = () => {
     if (videoRef.current) {
       const rate = videoRef.current.playbackRate;
-      if (altAudioRef.current && Math.abs(altAudioRef.current.playbackRate - rate) > 0.01) {
+      if (altAudioRef.current && Math.abs(altAudioRef.current.playbackRate - rate) > 0.06) {
         altAudioRef.current.playbackRate = rate;
         altAudioRef.current.defaultPlaybackRate = rate;
       }
@@ -1548,11 +1570,16 @@ export default function LecturePlayer({
         playsInline
         preload="auto"
         style={{ display: 'none' }}
-        onRateChange={() => {
-          if (altAudioRef.current && videoRef.current) {
-            if (Math.abs(altAudioRef.current.playbackRate - videoRef.current.playbackRate) > 0.01) {
-              altAudioRef.current.playbackRate = videoRef.current.playbackRate;
-            }
+        onWaiting={() => {
+          // If alternate audio is buffering, pause video so they don't desync
+          if (videoRef.current && !videoRef.current.paused) {
+            videoRef.current.pause();
+          }
+        }}
+        onPlaying={() => {
+          // When alternate audio resumes, resume video if playing state is active
+          if (isPlaying && videoRef.current && videoRef.current.paused) {
+            videoRef.current.play().catch(() => {});
           }
         }}
       />

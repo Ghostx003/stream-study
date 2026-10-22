@@ -178,10 +178,8 @@ function getAudioFormatForCodec(codec) {
   const c = (codec || '').trim().toLowerCase();
   if (c === 'aac') return { ext: '.m4a', copy: true, format: 'mp4' };
   if (c === 'mp3') return { ext: '.mp3', copy: true, format: 'mp3' };
-  if (c === 'opus') return { ext: '.webm', copy: true, format: 'webm' };
-  if (c === 'vorbis') return { ext: '.webm', copy: true, format: 'webm' };
   if (c === 'flac') return { ext: '.flac', copy: true, format: 'flac' };
-  // Non-native browser audio (ac3, eac3, dts, truehd): transcode to AAC in MP4
+  // Opus, vorbis, ac3, eac3, dts, truehd: transcode to high-quality AAC in MP4 (.m4a) with faststart
   return { ext: '.m4a', copy: false, format: 'mp4' };
 }
 
