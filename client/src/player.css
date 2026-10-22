@@ -701,71 +701,98 @@ video::-webkit-media-text-track-container {
   align-items: center;
   gap: 14px;
   width: 100%;
+  height: 24px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.netflix-timeline-slider {
+/* Visual Sleek Thin Track (Netflix 3px Bar) */
+.netflix-track-bar {
+  position: relative;
   flex: 1;
-  height: 4px;
-  appearance: none;
-  -webkit-appearance: none;
-  background: rgba(255, 255, 255, 0.28);
-  border-radius: 4px;
-  outline: none;
-  cursor: pointer;
-  touch-action: none;
-  padding: 8px 0;
-  margin: -8px 0;
-  background-clip: content-box;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 2px;
   transition: height 0.15s ease;
-}
-.netflix-timeline-slider:hover,
-.netflix-timeline-slider:active {
-  height: 6px;
+  pointer-events: none;
 }
 
-.netflix-timeline-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
+.netflix-timeline-wrapper:hover .netflix-track-bar,
+.netflix-timeline-wrapper.scrubbing .netflix-track-bar {
+  height: 5px;
+}
+
+/* Red Played Fill */
+.netflix-track-played {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: #E50914;
+  border-radius: 2px;
+  pointer-events: none;
+  box-shadow: 0 0 4px rgba(229, 9, 20, 0.7);
+}
+
+/* Circle at the end of the red bar */
+.netflix-seek-knob {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: #E50914;
-  cursor: pointer;
-  box-shadow: 0 0 6px rgba(229, 9, 20, 0.9);
-  transition: transform 0.12s ease;
-}
-.netflix-timeline-slider:hover::-webkit-slider-thumb,
-.netflix-timeline-slider:active::-webkit-slider-thumb {
-  transform: scale(1.35);
+  box-shadow: 0 0 8px rgba(229, 9, 20, 0.95), 0 1px 3px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  transition: transform 0.1s ease;
+  z-index: 4;
 }
 
-.netflix-timeline-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border: none;
-  border-radius: 50%;
-  background: #E50914;
-  cursor: pointer;
-  box-shadow: 0 0 6px rgba(229, 9, 20, 0.9);
+.netflix-timeline-wrapper:hover .netflix-seek-knob,
+.netflix-timeline-wrapper.scrubbing .netflix-seek-knob {
+  transform: translate(-50%, -50%) scale(1.35);
+  box-shadow: 0 0 12px rgba(229, 9, 20, 1), 0 2px 6px rgba(0, 0, 0, 0.9);
 }
 
-.netflix-timeline-bookmarks {
+/* Invisible Range Input over the Track for Touch & Mouse Scrubbing */
+.netflix-timeline-slider {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
   right: 56px;
+  width: calc(100% - 56px);
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 10;
+  margin: 0;
+  padding: 0;
+  touch-action: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  border: none;
+}
+
+.netflix-timeline-bookmarks {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
+  z-index: 3;
 }
 .netflix-timeline-bookmark-dot {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: #ffffff;
-  box-shadow: 0 0 4px #fff;
+  box-shadow: 0 0 3px #ffffff;
   cursor: pointer;
   pointer-events: auto;
 }
@@ -1636,9 +1663,6 @@ video::-webkit-media-text-track-container {
   .netflix-timeline-wrapper {
     gap: 8px;
   }
-  .netflix-timeline-slider {
-    height: 3px;
-  }
   .netflix-time-remaining {
     font-size: 0.78rem;
   }
@@ -1869,6 +1893,18 @@ video::-webkit-media-text-track-container {
   }
 
   /* Bottom Controls & Action Bar */
+  .netflix-bottom-controls {
+    gap: 10px;
+    margin-bottom: max(6px, env(safe-area-inset-bottom, 6px));
+  }
+  .netflix-timeline-wrapper {
+    gap: 10px;
+    height: 26px;
+  }
+  .netflix-time-remaining {
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
   .netflix-action-bar {
     justify-content: space-between;
     gap: 2px;

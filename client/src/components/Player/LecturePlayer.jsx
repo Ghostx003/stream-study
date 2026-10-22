@@ -34,10 +34,26 @@ export const findPreferredAudioTrack = (tracks, preferredLang = 'eng') => {
     const label = (t.label || '').toLowerCase();
 
     if (p === 'eng' || p === 'en' || p === 'english') {
-      return lang.startsWith('en') || lang === 'eng' || title.includes('english') || label.includes('english');
+      return (
+        lang.startsWith('en') ||
+        lang === 'eng' ||
+        title.includes('english') ||
+        label.includes('english') ||
+        title.includes('eng') ||
+        label.includes('eng') ||
+        title.includes('dub') ||
+        label.includes('dub')
+      );
     }
     if (p === 'jpn' || p === 'ja' || p === 'japanese') {
-      return lang.startsWith('ja') || lang === 'jpn' || title.includes('japan') || label.includes('japan');
+      return (
+        lang.startsWith('ja') ||
+        lang === 'jpn' ||
+        title.includes('japan') ||
+        label.includes('japan') ||
+        title.includes('jpn') ||
+        label.includes('jpn')
+      );
     }
     if (p === 'spa' || p === 'es' || p === 'spanish') {
       return lang.startsWith('es') || lang === 'spa' || title.includes('spanish') || label.includes('spanish');
@@ -354,6 +370,11 @@ export default function LecturePlayer({
         altAudioRef.current.removeAttribute('src');
         altAudioRef.current.load();
       }
+      initAudioGain();
+      const gainVal = volume > 1.0 ? volume : 1.0;
+      if (videoGainRef.current) {
+        videoGainRef.current.gain.value = isMuted ? 0 : gainVal;
+      }
     } else {
       // Switch to secondary audio track via synchronized audio element
       if (altAudioRef.current) {
@@ -363,11 +384,11 @@ export default function LecturePlayer({
         audioEl.oncanplay = null;
         audioEl.onerror = null;
 
-        audioEl.pause();
+        // Video continues playing seamlessly without pause
+        const curRate = videoRef.current ? videoRef.current.playbackRate : playbackRate;
         audioEl.src = audioUrl;
         audioEl.volume = Math.min(1.0, volume);
         audioEl.muted = isMuted;
-        const curRate = videoRef.current ? videoRef.current.playbackRate : playbackRate;
         audioEl.playbackRate = curRate;
         audioEl.defaultPlaybackRate = curRate;
 
@@ -387,15 +408,26 @@ export default function LecturePlayer({
           } catch (e) {
             console.warn('Could not set currentTime on alt audio:', e);
           }
-          if (videoRef.current) {
-            videoRef.current.muted = true;
+          initAudioGain();
+          const gainVal = volume > 1.0 ? volume : 1.0;
+          if (altAudioGainRef.current) {
+            altAudioGainRef.current.gain.value = isMuted ? 0 : gainVal;
           }
-          if (isCurrentlyPlaying && !videoRef.current?.paused) {
-            audioEl.play().catch((err) => {
+
+          if (isCurrentlyPlaying || (videoRef.current && !videoRef.current.paused)) {
+            audioEl.play().then(() => {
+              if (videoRef.current) {
+                videoRef.current.muted = true;
+              }
+            }).catch((err) => {
               if (err.name !== 'AbortError') {
                 console.warn('Alternate audio play failed:', err);
               }
             });
+          } else {
+            if (videoRef.current) {
+              videoRef.current.muted = true;
+            }
           }
         };
 
@@ -412,9 +444,12 @@ export default function LecturePlayer({
         };
 
         audioEl.load();
+        if (audioEl.readyState >= 2) {
+          syncAndPlay();
+        }
       }
     }
-  }, [lecture.id, isMuted, volume, playbackRate, showToast]);
+  }, [lecture.id, isMuted, volume, playbackRate, initAudioGain, showToast]);
 
   // User-initiated audio track selection that persists across all future episodes
   const handleUserSelectAudioTrack = useCallback((at) => {
@@ -604,7 +639,11 @@ export default function LecturePlayer({
 
         // Auto-select preferred audio language (default English 'eng') across all episodes
         const savedAudioPref = localStorage.getItem('courseflix_audio_lang') || 'eng';
-        const preferredTrack = findPreferredAudioTrack(info.audioTracks, savedAudioPref);
+        let preferredTrack = findPreferredAudioTrack(info.audioTracks, savedAudioPref);
+        if (!preferredTrack && savedAudioPref !== 'eng') {
+          // Fallback to English if user's custom preference is not found
+          preferredTrack = findPreferredAudioTrack(info.audioTracks, 'eng');
+        }
 
         if (preferredTrack && preferredTrack.index > 0) {
           handleSelectAudioTrack(preferredTrack, false);
@@ -1657,18 +1696,6 @@ export default function LecturePlayer({
         preload="auto"
         crossOrigin="anonymous"
         style={{ display: 'none' }}
-        onWaiting={() => {
-          // If alternate audio is buffering, pause video so they don't desync
-          if (videoRef.current && !videoRef.current.paused) {
-            videoRef.current.pause();
-          }
-        }}
-        onPlaying={() => {
-          // When alternate audio resumes, resume video if playing state is active
-          if (isPlaying && videoRef.current && videoRef.current.paused) {
-            videoRef.current.play().catch(() => {});
-          }
-        }}
       />
 
       {/* Main Video Wrapper */}
@@ -2087,6 +2114,41 @@ export default function LecturePlayer({
                 onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
+                {/* Visual Sleek Thin Netflix Track */}
+                <div className="netflix-track-bar">
+                  {/* Played Red Line */}
+                  <div
+                    className="netflix-track-played"
+                    style={{ width: `${timelineProgressPercent}%` }}
+                  />
+                  {/* Circle Knob at the end of the played bar */}
+                  <div
+                    className="netflix-seek-knob"
+                    style={{ left: `${timelineProgressPercent}%` }}
+                  />
+                  {/* Bookmark dots on timeline */}
+                  <div className="netflix-timeline-bookmarks">
+                    {bookmarks.map((bTime) => {
+                      const bPercent = duration > 0 ? (bTime / duration) * 100 : 0;
+                      return (
+                        <div
+                          key={bTime}
+                          className="netflix-timeline-bookmark-dot"
+                          style={{ left: `${bPercent}%` }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (videoRef.current) {
+                              videoRef.current.currentTime = bTime;
+                              showToast?.(`Moment: ${formatTime(bTime)}`);
+                            }
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Range Input for Native Touch & Mouse Scrubbing */}
                 <input
                   type="range"
                   className="netflix-timeline-slider"
@@ -2123,31 +2185,7 @@ export default function LecturePlayer({
                   }}
                   onInput={handleTimelineInput}
                   onChange={handleTimelineChange}
-                  style={{
-                    background: `linear-gradient(to right, #E50914 ${timelineProgressPercent}%, rgba(255, 255, 255, 0.25) ${timelineProgressPercent}%)`
-                  }}
                 />
-
-                {/* Bookmark dots on timeline */}
-                <div className="netflix-timeline-bookmarks">
-                  {bookmarks.map((bTime) => {
-                    const bPercent = duration > 0 ? (bTime / duration) * 100 : 0;
-                    return (
-                      <div
-                        key={bTime}
-                        className="netflix-timeline-bookmark-dot"
-                        style={{ left: `${bPercent}%` }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (videoRef.current) {
-                            videoRef.current.currentTime = bTime;
-                            showToast?.(`Moment: ${formatTime(bTime)}`);
-                          }
-                        }}
-                      />
-                    );
-                  })}
-                </div>
 
                 {/* Remaining Time Display (NO '--', cycles Real-Time / Standard Video Time / Ends At on click) */}
                 <div
