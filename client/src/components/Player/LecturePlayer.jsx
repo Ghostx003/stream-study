@@ -1431,6 +1431,21 @@ export default function LecturePlayer({
           </div>
         </div>
 
+        {/* Persistent Corner Muted Indicator */}
+        {isMuted && (
+          <div
+            className="netflix-muted-corner-badge"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleMute();
+            }}
+            title="Video is Muted (Press M or click to unmute)"
+          >
+            <i className="fas fa-volume-mute"></i>
+            <span>Muted</span>
+          </div>
+        )}
+
         {/* Skip Intro Button */}
         {showSkipIntro && (
           <button
