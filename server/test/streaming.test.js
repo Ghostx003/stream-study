@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { parseRange, getMimeType } from '../src/streamer.js';
+import { parseRange, getMimeType, isNonNativeContainer, getRemuxCachePath } from '../src/streamer.js';
 import app, { startServer } from '../src/index.js';
 import { configManager } from '../src/configManager.js';
 
@@ -41,6 +41,17 @@ test('MIME Types Detection', () => {
   assert.strictEqual(getMimeType('video.mkv'), 'video/x-matroska');
   assert.strictEqual(getMimeType('video.webm'), 'video/webm');
   assert.strictEqual(getMimeType('video.mov'), 'video/quicktime');
+  assert.strictEqual(getMimeType('video.ts'), 'video/mp2t');
+});
+
+test('Non-Native Container Detection', () => {
+  assert.strictEqual(isNonNativeContainer('episode.ts'), true);
+  assert.strictEqual(isNonNativeContainer('old_taxi/2.ts'), true);
+  assert.strictEqual(isNonNativeContainer('video.avi'), true);
+  assert.strictEqual(isNonNativeContainer('video.flv'), true);
+  assert.strictEqual(isNonNativeContainer('video.mp4'), false);
+  assert.strictEqual(isNonNativeContainer('video.mkv'), false);
+  assert.strictEqual(isNonNativeContainer('video.webm'), false);
 });
 
 test('HTTP Byte-Range Video Streaming Integration', async (t) => {

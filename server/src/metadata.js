@@ -3,6 +3,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { fileURLToPath } from 'url';
 import * as mm from 'music-metadata';
+import { isNonNativeContainer, prewarmRemuxVideo } from './streamer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -170,7 +171,10 @@ class MetadataService {
       const cacheKey = `${filePath}::${stat.size}::${stat.mtimeMs}`;
       const cached = this.cache[cacheKey];
 
-      if (cached && cached.audioTracks && cached.subtitles && typeof cached.duration === 'number') {
+      if (cached && cached.audioTracks && cached.subtitles && typeof cached.duration === 'number' && cached.isNonNative !== undefined) {
+        if (cached.isNonNative) {
+          prewarmRemuxVideo(filePath).catch(() => {});
+        }
         return cached;
       }
 
@@ -179,7 +183,12 @@ class MetadataService {
 
       const ext = path.extname(filePath).toLowerCase();
       const isMkv = ext === '.mkv';
+      const isNonNative = isNonNativeContainer(filePath);
       const hasAc3OrDts = streams.audioTracks.some(a => ['ac3', 'eac3', 'dts', 'truehd'].includes(a.codec?.toLowerCase()));
+
+      if (isNonNative) {
+        prewarmRemuxVideo(filePath).catch(() => {});
+      }
 
       const info = {
         duration,
@@ -187,7 +196,8 @@ class MetadataService {
         subtitles: streams.subtitles,
         video: streams.video,
         isMkv,
-        needsRemux: isMkv || hasAc3OrDts,
+        isNonNative,
+        needsRemux: isMkv || isNonNative || hasAc3OrDts,
         size: stat.size,
         updatedAt: Date.now()
       };

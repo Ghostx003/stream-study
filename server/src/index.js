@@ -8,11 +8,25 @@ import { fileURLToPath } from 'url';
 import { getLanAddresses, checkCandidatePorts, getTailscaleIp } from './network.js';
 import { configManager } from './configManager.js';
 import { scanFolder, scanAllLectures, resolveSecurePath, generateLectureKey, invalidateScanCache } from './scanner.js';
-import { streamVideoFile, serveSubtitleFile, streamRemuxFile, serveEmbeddedSubtitle, serveAudioTrack, prewarmAudioTrack } from './streamer.js';
+import { 
+  streamVideoFile, 
+  serveSubtitleFile, 
+  streamRemuxFile, 
+  serveEmbeddedSubtitle, 
+  serveAudioTrack, 
+  prewarmAudioTrack,
+  isNonNativeContainer,
+  getRemuxCachePath,
+  prewarmRemuxVideo
+} from './streamer.js';
 import { metadataService } from './metadata.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+process.on('unhandledRejection', (reason) => {
+  console.warn('[Server] Unhandled rejection:', reason?.message || reason);
+});
 
 const app = express();
 app.use(cors());
@@ -250,18 +264,32 @@ app.all('/api/stream', (req, res) => {
   try {
     const secureFilePath = resolveSecurePath(targetRoot.path, relativeFilePath);
     const forceRemux = req.query.remux === '1' || req.query.remux === 'true';
+    const isNonNative = isNonNativeContainer(secureFilePath);
 
-    // Direct byte-range streaming without conversion (native Chrome playback)
-    if (forceRemux) {
+    // Non-native browser formats (.ts, .avi, .flv, etc.) or explicitly requested remux
+    if (isNonNative || forceRemux) {
+      // 1. If complete remuxed MP4 exists in cache, stream natively with byte ranges
+      const cached = getRemuxCachePath(secureFilePath);
+      if (cached) {
+        return streamVideoFile(req, res, cached);
+      }
+
+      // 2. Prewarm full MP4 in background so subsequent seeks and plays use byte ranges
+      prewarmRemuxVideo(secureFilePath, { highPriority: true }).catch(err => {
+        console.warn('[Remux] Background prewarm error:', err?.message || err);
+      });
+
+      // 3. Stream on-the-fly fragmented MP4 for immediate 0.1s startup
       const audioIdx = req.query.audio !== undefined && req.query.audio !== '' ? parseInt(req.query.audio, 10) : null;
       const startTime = req.query.startTime !== undefined && req.query.startTime !== '' ? parseFloat(req.query.startTime) : null;
-      streamRemuxFile(req, res, secureFilePath, {
+      return streamRemuxFile(req, res, secureFilePath, {
         startTime: startTime || 0,
         audioStreamIndex: audioIdx !== null && !isNaN(audioIdx) ? audioIdx : undefined
       });
-    } else {
-      streamVideoFile(req, res, secureFilePath);
     }
+
+    // Direct byte-range streaming without conversion (native Chrome playback)
+    streamVideoFile(req, res, secureFilePath);
   } catch (err) {
     res.status(403).json({ error: err.message });
   }

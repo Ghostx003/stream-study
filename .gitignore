@@ -24,3 +24,5 @@ Temporary/
 server/data/cache/
 *.tmp
 server/data/*.tmp
+
+test-lectures/

@@ -165,11 +165,161 @@ export function serveEmbeddedSubtitle(req, res, filePath, streamIndex) {
   });
 }
 
+const NON_NATIVE_CONTAINERS = new Set([
+  '.ts', '.m2ts', '.mts', '.avi', '.flv', '.wmv', '.vob', '.ogv'
+]);
+
+/**
+ * Checks if a video file has a non-native container format that requires remuxing for browser playback.
+ */
+export function isNonNativeContainer(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return NON_NATIVE_CONTAINERS.has(ext);
+}
+
 const __streamer_filename = fileURLToPath(import.meta.url);
 const __streamer_dirname = path.dirname(__streamer_filename);
 const audioCacheDir = path.resolve(__streamer_dirname, '../data/cache/audio');
 if (!fs.existsSync(audioCacheDir)) {
   fs.mkdirSync(audioCacheDir, { recursive: true });
+}
+
+const remuxCacheDir = path.resolve(__streamer_dirname, '../data/cache/remux');
+if (!fs.existsSync(remuxCacheDir)) {
+  fs.mkdirSync(remuxCacheDir, { recursive: true });
+}
+
+const remuxInFlight = new Map();
+const remuxQueue = [];
+let activeRemuxCount = 0;
+const MAX_CONCURRENT_REMUX = 1;
+
+function processNextRemux() {
+  if (activeRemuxCount >= MAX_CONCURRENT_REMUX || remuxQueue.length === 0) {
+    return;
+  }
+  const job = remuxQueue.shift();
+  activeRemuxCount++;
+  job.task().finally(() => {
+    activeRemuxCount--;
+    processNextRemux();
+  });
+}
+
+/**
+ * Checks if a completed remuxed MP4 exists for the file.
+ */
+export function getRemuxCachePath(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const stat = fs.statSync(filePath);
+    const hash = crypto.createHash('md5').update(`${filePath}::${stat.size}::${stat.mtimeMs}`).digest('hex');
+    const targetFilePath = path.join(remuxCacheDir, `${hash}.mp4`);
+    if (fs.existsSync(targetFilePath) && !targetFilePath.includes('.tmp')) {
+      const targetStat = fs.statSync(targetFilePath);
+      if (targetStat.size > 0) {
+        return targetFilePath;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * Remuxes a non-native video file (like .ts, .avi, .flv) into a fast-start MP4 in the background.
+ * Copies video stream (0% CPU, 100% original quality) and copies or transcodes audio to AAC.
+ */
+export function prewarmRemuxVideo(filePath, options = {}) {
+  if (!fs.existsSync(filePath)) return Promise.reject(new Error('File not found'));
+
+  const stat = fs.statSync(filePath);
+  const hash = crypto.createHash('md5').update(`${filePath}::${stat.size}::${stat.mtimeMs}`).digest('hex');
+  const targetFilePath = path.join(remuxCacheDir, `${hash}.mp4`);
+
+  if (fs.existsSync(targetFilePath) && !targetFilePath.includes('.tmp')) {
+    try {
+      const targetStat = fs.statSync(targetFilePath);
+      if (targetStat.size > 0) {
+        return Promise.resolve(targetFilePath);
+      }
+    } catch {}
+  }
+
+  if (remuxInFlight.has(hash)) {
+    return remuxInFlight.get(hash);
+  }
+
+  const promise = new Promise((resolve, reject) => {
+    const task = () => new Promise((taskDone) => {
+      // Re-verify if already completed while waiting in queue
+      if (fs.existsSync(targetFilePath) && !targetFilePath.includes('.tmp')) {
+        try {
+          const targetStat = fs.statSync(targetFilePath);
+          if (targetStat.size > 0) {
+            resolve(targetFilePath);
+            taskDone();
+            return;
+          }
+        } catch {}
+      }
+
+      const tempFile = `${targetFilePath}.${Date.now()}.tmp.mp4`;
+      const runFfmpeg = (tryCopyAudio) => {
+        const args = [
+          '-v', 'error',
+          '-threads', '0',
+          '-i', filePath,
+          '-map', '0:v:0',
+          '-map', '0:a:0?',
+          '-c:v', 'copy',
+          ...(tryCopyAudio ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']),
+          '-f', 'mp4',
+          '-movflags', '+faststart',
+          tempFile,
+          '-y'
+        ];
+
+        execFile('ffmpeg', args, { timeout: 300000 }, (ffErr) => {
+          if (ffErr) {
+            if (tryCopyAudio) {
+              // Audio copy failed (e.g., incompatible audio format for MP4)
+              // Retry with AAC audio transcode
+              try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch {}
+              return runFfmpeg(false);
+            }
+            try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch {}
+            reject(ffErr);
+            taskDone();
+            return;
+          }
+
+          try {
+            fs.renameSync(tempFile, targetFilePath);
+          } catch {
+            // In case another process/thread renamed it concurrently
+          }
+          resolve(targetFilePath);
+          taskDone();
+        });
+      };
+
+      runFfmpeg(true);
+    });
+
+    if (options.highPriority) {
+      remuxQueue.unshift({ task });
+    } else {
+      remuxQueue.push({ task });
+    }
+    processNextRemux();
+  });
+
+  remuxInFlight.set(hash, promise);
+  promise.finally(() => {
+    remuxInFlight.delete(hash);
+  });
+
+  return promise;
 }
 
 const audioInFlight = new Map();
