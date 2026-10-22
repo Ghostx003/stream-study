@@ -6,7 +6,7 @@ import ShortcutsModal from './ShortcutsModal';
 const PRESET_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5];
 
 export const SUB_FONT_OPTIONS = [
-  { id: 'comic', label: 'Comic Sans', font: '"Comic Sans MS", "Comic Sans", "Chalkboard SE", "Comic Neue", cursive, sans-serif' },
+  { id: 'comic', label: 'Comic Sans MS', font: '"Comic Sans MS", "Comic Neue", sans-serif' },
   { id: 'arial', label: 'Arial', font: 'Arial, "Helvetica Neue", Helvetica, sans-serif' },
   { id: 'roboto', label: 'Roboto / Modern', font: '"Roboto", "Segoe UI", system-ui, -apple-system, sans-serif' },
   { id: 'montserrat', label: 'Montserrat', font: '"Montserrat", "Outfit", "Inter", sans-serif' },
@@ -17,7 +17,7 @@ export const SUB_FONT_OPTIONS = [
 ];
 
 export const SUB_POS_PRESETS = [
-  { id: 'bottom', label: 'Bottom (0px)', offset: 0 },
+  { id: 'bottom', label: 'Bottom (5px)', offset: 5 },
   { id: 'low', label: 'Low (+40px)', offset: 40 },
   { id: 'mid', label: 'Lower 3rd (+90px)', offset: 90 },
   { id: 'center', label: 'Middle (+180px)', offset: 180 },
@@ -126,7 +126,7 @@ export default function LecturePlayer({
   });
   const [subVerticalOffset, setSubVerticalOffset] = useState(() => {
     const saved = localStorage.getItem('courseflix_sub_offset');
-    return saved !== null && !isNaN(parseInt(saved, 10)) ? parseInt(saved, 10) : 0;
+    return saved !== null && !isNaN(parseInt(saved, 10)) ? parseInt(saved, 10) : 5;
   });
   const activeSubFont = SUB_FONT_OPTIONS.find(f => f.id === subFontId) || SUB_FONT_OPTIONS[0];
   const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
@@ -456,7 +456,7 @@ export default function LecturePlayer({
         for (let j = 0; j < track.cues.length; j++) {
           const cue = track.cues[j];
           try {
-            if (subVerticalOffset === 0) {
+            if (subVerticalOffset <= 5) {
               cue.snapToLines = true;
               cue.line = 'auto';
             } else {
@@ -1563,7 +1563,7 @@ export default function LecturePlayer({
                   for (let i = 0; i < videoRef.current.textTracks.length; i++) {
                     const track = videoRef.current.textTracks[i];
                     track.mode = 'showing';
-                    if (track.cues && subVerticalOffset > 0) {
+                    if (track.cues && subVerticalOffset > 5) {
                       for (let j = 0; j < track.cues.length; j++) {
                         try {
                           const cue = track.cues[j];
@@ -2278,7 +2278,7 @@ export default function LecturePlayer({
                 <div className="sub-settings-label">
                   <span>VERTICAL POSITION</span>
                   <span style={{ color: '#E50914', fontSize: '0.8rem', fontWeight: '700' }}>
-                    {subVerticalOffset === 0 ? 'Bottom (0px)' : `+${subVerticalOffset}px UP`}
+                    {subVerticalOffset === 5 ? 'Bottom (5px default)' : `${subVerticalOffset}px from bottom`}
                   </span>
                 </div>
 
@@ -2339,14 +2339,14 @@ export default function LecturePlayer({
                     <i className="fas fa-chevron-up"></i> +10px
                   </button>
 
-                  {subVerticalOffset > 0 && (
+                  {subVerticalOffset !== 5 && (
                     <button
                       className="sub-pos-reset-btn"
-                      title="Reset position to bottom"
+                      title="Reset position to 5px from bottom"
                       onClick={() => {
-                        setSubVerticalOffset(0);
-                        localStorage.setItem('courseflix_sub_offset', '0');
-                        showToast?.('Position: Reset to Bottom');
+                        setSubVerticalOffset(5);
+                        localStorage.setItem('courseflix_sub_offset', '5');
+                        showToast?.('Position: Reset to 5px (Bottom)');
                       }}
                     >
                       Reset
