@@ -521,6 +521,11 @@ video::-webkit-media-text-track-container {
   transition: height 0.05s linear;
 }
 
+.netflix-vertical-slider .slider-fill.extra-boost {
+  background: linear-gradient(to top, #ffffff 50%, #ff9800 80%, #ff5722 100%);
+  box-shadow: 0 0 10px rgba(255, 152, 0, 0.85);
+}
+
 /* ==========================================================================
    HORIZONTAL SLIDE-TO-SKIP HUD
    ========================================================================== */

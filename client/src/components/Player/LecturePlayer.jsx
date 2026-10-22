@@ -117,6 +117,81 @@ export default function LecturePlayer({
   const touchStartRef = useRef({ x: 0, y: 0, time: 0, isVertical: null, moved: false });
   const sliderFadeTimerRef = useRef(null);
 
+  // Web Audio API Extra Volume Boost (up to 200%)
+  const audioCtxRef = useRef(null);
+  const videoGainRef = useRef(null);
+  const altAudioGainRef = useRef(null);
+
+  const initAudioGain = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioCtx();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+
+      if (videoRef.current && !videoGainRef.current) {
+        try {
+          const source = ctx.createMediaElementSource(videoRef.current);
+          const gain = ctx.createGain();
+          source.connect(gain);
+          gain.connect(ctx.destination);
+          videoGainRef.current = gain;
+        } catch (e) {}
+      }
+
+      if (altAudioRef.current && !altAudioGainRef.current) {
+        try {
+          const source = ctx.createMediaElementSource(altAudioRef.current);
+          const gain = ctx.createGain();
+          source.connect(gain);
+          gain.connect(ctx.destination);
+          altAudioGainRef.current = gain;
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }, []);
+
+  const applyVolume = useCallback((newVol) => {
+    initAudioGain();
+    const clamped = Math.max(0, Math.min(2.0, Math.round(newVol * 100) / 100));
+    setVolume(clamped);
+    const elementVol = Math.min(1.0, clamped);
+
+    if (videoRef.current) {
+      if (selectedAudioTrack === 0) {
+        videoRef.current.volume = elementVol;
+        if (clamped > 0 && videoRef.current.muted) {
+          videoRef.current.muted = false;
+          setIsMuted(false);
+        }
+      }
+    }
+    if (altAudioRef.current) {
+      altAudioRef.current.volume = elementVol;
+      if (clamped > 0 && altAudioRef.current.muted) {
+        altAudioRef.current.muted = false;
+      }
+    }
+
+    // Extra volume boost via Web Audio API GainNode
+    const gainVal = clamped > 1.0 ? clamped : 1.0;
+    if (videoGainRef.current) {
+      videoGainRef.current.gain.value = isMuted ? 0 : gainVal;
+    }
+    if (altAudioGainRef.current) {
+      altAudioGainRef.current.gain.value = isMuted ? 0 : gainVal;
+    }
+
+    if (clamped > 1.0) {
+      showToast?.(`Volume: ${Math.round(clamped * 100)}% (Extra Boost)`);
+    }
+  }, [selectedAudioTrack, isMuted, initAudioGain, showToast]);
+
   // Netflix Bottom Drawers ('moments' | 'speed' | 'episodes' | 'audioSub' | null)
   const [activeDrawer, setActiveDrawer] = useState(null);
 
@@ -269,7 +344,7 @@ export default function LecturePlayer({
     if (at.index === 0) {
       // Revert to primary audio track in native video element
       videoRef.current.muted = isMuted;
-      videoRef.current.volume = volume;
+      videoRef.current.volume = Math.min(1.0, volume);
       videoRef.current.playbackRate = playbackRate;
       videoRef.current.defaultPlaybackRate = playbackRate;
       if (altAudioRef.current) {
@@ -290,7 +365,7 @@ export default function LecturePlayer({
 
         audioEl.pause();
         audioEl.src = audioUrl;
-        audioEl.volume = volume;
+        audioEl.volume = Math.min(1.0, volume);
         audioEl.muted = isMuted;
         const curRate = videoRef.current ? videoRef.current.playbackRate : playbackRate;
         audioEl.playbackRate = curRate;
@@ -854,7 +929,7 @@ export default function LecturePlayer({
         x: t.clientX,
         y: t.clientY,
         time: Date.now(),
-        startVolume: videoRef.current ? videoRef.current.volume : volume,
+        startVolume: volume,
         startBrightness: brightness,
         startTime: videoRef.current ? videoRef.current.currentTime : currentTime,
         isLeftSide,
@@ -929,28 +1004,15 @@ export default function LecturePlayer({
       const deltaRatio = -dy / (rect.height * 0.55);
 
       if (start.isLeftSide) {
-        const newBright = Math.max(0.25, Math.min(1.5, start.startBrightness + deltaRatio));
+        // Natural Screen Dimming (0.15 to 1.0) with zero overexposure or white clipping
+        const newBright = Math.max(0.15, Math.min(1.0, Math.round((start.startBrightness + deltaRatio) * 100) / 100));
         setBrightness(newBright);
         setShowBrightnessSlider(true);
         setShowVolumeSlider(false);
       } else if (start.isRightSide) {
-        const newVol = Math.max(0, Math.min(1.0, start.startVolume + deltaRatio));
-        setVolume(newVol);
-        if (videoRef.current) {
-          if (selectedAudioTrack === 0) {
-            videoRef.current.volume = newVol;
-            if (newVol > 0 && videoRef.current.muted) {
-              videoRef.current.muted = false;
-              setIsMuted(false);
-            }
-          }
-        }
-        if (altAudioRef.current) {
-          altAudioRef.current.volume = newVol;
-          if (newVol > 0 && altAudioRef.current.muted) {
-            altAudioRef.current.muted = false;
-          }
-        }
+        // Extra Volume Boost (0% to 200%)
+        const newVol = Math.max(0, Math.min(2.0, Math.round((start.startVolume + deltaRatio * 1.5) * 100) / 100));
+        applyVolume(newVol);
         setShowVolumeSlider(true);
         setShowBrightnessSlider(false);
       }
@@ -1399,6 +1461,7 @@ export default function LecturePlayer({
   // Mute / Unmute
   const toggleMute = useCallback(() => {
     if (!videoRef.current) return;
+    initAudioGain();
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
     if (selectedAudioTrack === 0) {
@@ -1407,10 +1470,17 @@ export default function LecturePlayer({
     if (altAudioRef.current) {
       altAudioRef.current.muted = nextMuted;
     }
-    showToast?.(nextMuted ? 'Muted' : 'Unmuted');
-  }, [isMuted, selectedAudioTrack, showToast]);
+    const gainVal = volume > 1.0 ? volume : 1.0;
+    if (videoGainRef.current) {
+      videoGainRef.current.gain.value = nextMuted ? 0 : gainVal;
+    }
+    if (altAudioGainRef.current) {
+      altAudioGainRef.current.gain.value = nextMuted ? 0 : gainVal;
+    }
+    showToast?.(nextMuted ? 'Muted' : `Volume: ${Math.round(volume * 100)}%`);
+  }, [isMuted, selectedAudioTrack, volume, initAudioGain, showToast]);
 
-  // Global Keyboard Shortcuts (Space, Left/Right, V/S for Subtitles, F for Fullscreen, M for Mute, B for Brown Noise)
+  // Global Keyboard Shortcuts (Space, Left/Right, Up/Down for Volume, V/S for Subtitles, F for Fullscreen, M for Mute, B for Brown Noise)
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Don't intercept if user is typing in an input, textarea or select
@@ -1418,6 +1488,22 @@ export default function LecturePlayer({
       if (isLocked) return;
 
       switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          applyVolume(volume + 0.1);
+          setShowVolumeSlider(true);
+          setShowBrightnessSlider(false);
+          if (sliderFadeTimerRef.current) clearTimeout(sliderFadeTimerRef.current);
+          sliderFadeTimerRef.current = setTimeout(() => setShowVolumeSlider(false), 1200);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          applyVolume(volume - 0.1);
+          setShowVolumeSlider(true);
+          setShowBrightnessSlider(false);
+          if (sliderFadeTimerRef.current) clearTimeout(sliderFadeTimerRef.current);
+          sliderFadeTimerRef.current = setTimeout(() => setShowVolumeSlider(false), 1200);
+          break;
         case ' ':
         case 'k':
         case 'K':
@@ -1569,6 +1655,7 @@ export default function LecturePlayer({
         ref={altAudioRef}
         playsInline
         preload="auto"
+        crossOrigin="anonymous"
         style={{ display: 'none' }}
         onWaiting={() => {
           // If alternate audio is buffering, pause video so they don't desync
@@ -1601,7 +1688,7 @@ export default function LecturePlayer({
           handleViewportTap(e);
         }}
       >
-        {/* Video Element with CSS Brightness & Aspect Ratio filter */}
+        {/* Video Element (Natural pristine colors, no exposure or contrast blowout) */}
         <video
           key={lecture.id}
           ref={videoRef}
@@ -1611,7 +1698,7 @@ export default function LecturePlayer({
           playsInline
           crossOrigin="anonymous"
           style={{
-            filter: `brightness(${brightness})`,
+            filter: 'none',
             objectFit: activeDrawer === 'episodes' ? 'contain' : (aspectMode === 'fit' ? 'contain' : aspectMode === 'fill' ? 'cover' : aspectMode === 'stretch' ? 'fill' : 'cover'),
             transform: activeDrawer === 'episodes' ? 'scale(0.92)' : (aspectMode === 'zoom' ? 'scale(1.22)' : 'none'),
             width: '100%',
@@ -1660,6 +1747,20 @@ export default function LecturePlayer({
           )}
         </video>
 
+        {/* Natural Screen Dimmer Overlay (Physical Backlight Simulation - Zero Exposure Blowout) */}
+        <div
+          className="netflix-brightness-overlay"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: '#000000',
+            opacity: Math.max(0, Math.min(0.85, 1 - brightness)),
+            pointerEvents: 'none',
+            zIndex: 1,
+            transition: 'opacity 0.05s linear'
+          }}
+        />
+
         {/* Double-Tap Seeking Wave Overlays */}
         <div className={`seek-overlay left ${leftSeekActive ? 'show-icon' : ''}`}>
           <svg viewBox="0 0 24 24" width="56" height="56" fill="currentColor">
@@ -1703,16 +1804,44 @@ export default function LecturePlayer({
         <div className={`netflix-vertical-slider brightness-slider ${showBrightnessSlider ? 'visible' : ''}`}>
           <div className="slider-icon"><i className="fas fa-sun"></i></div>
           <div className="slider-track">
-            <div className="slider-fill" style={{ height: `${Math.round(((brightness - 0.25) / 1.25) * 100)}%` }}></div>
+            <div className="slider-fill" style={{ height: `${Math.round(((brightness - 0.15) / 0.85) * 100)}%` }}></div>
           </div>
         </div>
 
         {/* Vertical Volume Slider Indicator (Right Side) */}
         <div className={`netflix-vertical-slider volume-slider ${showVolumeSlider ? 'visible' : ''}`}>
-          <div className="slider-icon"><i className={`fas fa-${volume === 0 || isMuted ? 'volume-mute' : 'volume-up'}`}></i></div>
-          <div className="slider-track">
-            <div className="slider-fill" style={{ height: `${Math.round((isMuted ? 0 : volume) * 100)}%` }}></div>
+          <div className="slider-icon">
+            <i
+              className={`fas fa-${volume === 0 || isMuted ? 'volume-mute' : 'volume-up'}`}
+              style={{ color: volume > 1.0 ? '#ff9800' : '#ffffff' }}
+            ></i>
           </div>
+          <div className="slider-track">
+            <div
+              className={`slider-fill ${volume > 1.0 ? 'extra-boost' : ''}`}
+              style={{
+                height: `${Math.round((isMuted ? 0 : volume / 2.0) * 100)}%`,
+                background: volume > 1.0 ? 'linear-gradient(to top, #ffffff 50%, #ff9800 80%, #ff5722 100%)' : undefined,
+                boxShadow: volume > 1.0 ? '0 0 10px rgba(255, 152, 0, 0.85)' : undefined
+              }}
+            ></div>
+          </div>
+          {volume > 1.0 && (
+            <div
+              className="slider-boost-label"
+              style={{
+                position: 'absolute',
+                bottom: '-22px',
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                color: '#ff9800',
+                textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {Math.round(volume * 100)}%
+            </div>
+          )}
         </div>
 
         {/* Persistent Corner Muted Indicator */}
