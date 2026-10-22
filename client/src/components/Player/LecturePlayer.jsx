@@ -24,6 +24,36 @@ export const SUB_POS_PRESETS = [
   { id: 'top', label: 'Top (+320px)', offset: 320 },
 ];
 
+export const findPreferredAudioTrack = (tracks, preferredLang = 'eng') => {
+  if (!Array.isArray(tracks) || tracks.length === 0) return null;
+  const p = (preferredLang || 'eng').toLowerCase();
+
+  const match = tracks.find((t) => {
+    const lang = (t.language || '').toLowerCase();
+    const title = (t.title || '').toLowerCase();
+    const label = (t.label || '').toLowerCase();
+
+    if (p === 'eng' || p === 'en' || p === 'english') {
+      return lang.startsWith('en') || lang === 'eng' || title.includes('english') || label.includes('english');
+    }
+    if (p === 'jpn' || p === 'ja' || p === 'japanese') {
+      return lang.startsWith('ja') || lang === 'jpn' || title.includes('japan') || label.includes('japan');
+    }
+    if (p === 'spa' || p === 'es' || p === 'spanish') {
+      return lang.startsWith('es') || lang === 'spa' || title.includes('spanish') || label.includes('spanish');
+    }
+    if (p === 'fre' || p === 'fra' || p === 'fr' || p === 'french') {
+      return lang.startsWith('fr') || lang === 'fre' || lang === 'fra' || title.includes('french') || label.includes('french');
+    }
+    if (p === 'ger' || p === 'deu' || p === 'de' || p === 'german') {
+      return lang.startsWith('de') || lang === 'ger' || lang === 'deu' || title.includes('german') || label.includes('german');
+    }
+    return lang === p || lang.startsWith(p) || title.includes(p) || label.includes(p);
+  });
+
+  return match || null;
+};
+
 const trimTitle = (str, maxLen = 42) => {
   if (!str) return '';
   const trimmed = str.trim();
@@ -211,9 +241,11 @@ export default function LecturePlayer({
   }, [duration, lecture.id, onUpdateLectureProgress]);
 
   // Audio Track Selection Handler (supports both native Safari and Chrome/Firefox synchronized stream fallback)
-  const handleSelectAudioTrack = useCallback((at) => {
+  const handleSelectAudioTrack = useCallback((at, notify = true) => {
     setSelectedAudioTrack(at.index);
-    showToast?.(`Audio: ${at.label}`);
+    if (notify) {
+      showToast?.(`Audio: ${at.label}`);
+    }
 
     // Safari / WebKit native audioTracks API
     if (videoRef.current && videoRef.current.audioTracks && videoRef.current.audioTracks.length > 0) {
@@ -303,6 +335,24 @@ export default function LecturePlayer({
     }
   }, [lecture.id, isMuted, volume, playbackRate, showToast]);
 
+  // User-initiated audio track selection that persists across all future episodes
+  const handleUserSelectAudioTrack = useCallback((at) => {
+    let langCode = 'eng';
+    if (at.language && at.language !== 'und' && at.language !== 'default') {
+      langCode = at.language;
+    } else {
+      const lower = ((at.label || '') + ' ' + (at.title || '')).toLowerCase();
+      if (lower.includes('japan')) langCode = 'jpn';
+      else if (lower.includes('english') || lower.includes('eng')) langCode = 'eng';
+      else if (lower.includes('spanish') || lower.includes('spa')) langCode = 'spa';
+      else if (lower.includes('french') || lower.includes('fre') || lower.includes('fra')) langCode = 'fre';
+      else if (lower.includes('german') || lower.includes('ger') || lower.includes('deu')) langCode = 'ger';
+      else langCode = at.label || 'eng';
+    }
+    localStorage.setItem('courseflix_audio_lang', langCode);
+    handleSelectAudioTrack(at, true);
+  }, [handleSelectAudioTrack]);
+
   // Subtitle Cycling Handler (Off -> Sub 1 -> Sub 2 -> ... -> Off)
   const cycleSubtitle = useCallback(() => {
     if (!availableSubtitles || availableSubtitles.length === 0) {
@@ -336,8 +386,8 @@ export default function LecturePlayer({
     const curIdx = selectedAudioTrack;
     const nextIdx = (curIdx + 1) % availableAudioTracks.length;
     const nextTrack = availableAudioTracks[nextIdx];
-    handleSelectAudioTrack(nextTrack);
-  }, [availableAudioTracks, selectedAudioTrack, handleSelectAudioTrack, showToast]);
+    handleUserSelectAudioTrack(nextTrack);
+  }, [availableAudioTracks, selectedAudioTrack, handleUserSelectAudioTrack, showToast]);
 
   // Ensure HTML5 textTrack mode is set to 'showing' so cues render on screen
   useEffect(() => {
@@ -476,7 +526,19 @@ export default function LecturePlayer({
       if (!isMounted || !info) return;
       if (info.audioTracks && info.audioTracks.length > 0) {
         setAvailableAudioTracks(info.audioTracks);
-        setSelectedAudioTrack(0);
+
+        // Auto-select preferred audio language (default English 'eng') across all episodes
+        const savedAudioPref = localStorage.getItem('courseflix_audio_lang') || 'eng';
+        const preferredTrack = findPreferredAudioTrack(info.audioTracks, savedAudioPref);
+
+        if (preferredTrack && preferredTrack.index > 0) {
+          handleSelectAudioTrack(preferredTrack, false);
+        } else {
+          setSelectedAudioTrack(0);
+          if (videoRef.current) {
+            videoRef.current.muted = isMuted;
+          }
+        }
       }
       // Combine and strictly deduplicate subtitles (prevent identical duplicate entries)
       const rawSubs = [...(info.subtitles || []), ...(lecture.subtitles || [])];
@@ -1143,15 +1205,21 @@ export default function LecturePlayer({
           const at = videoRef.current.audioTracks[i];
           tracks.push({
             id: i,
+            index: i,
             streamIndex: i,
             label: at.label || `Audio Track ${i + 1} (${at.language || 'Default'})`,
             language: at.language
           });
         }
         setAvailableAudioTracks(tracks);
+        const savedAudioPref = localStorage.getItem('courseflix_audio_lang') || 'eng';
+        const preferredTrack = findPreferredAudioTrack(tracks, savedAudioPref);
+        if (preferredTrack && preferredTrack.index > 0) {
+          handleSelectAudioTrack(preferredTrack, false);
+        }
       } else {
         setAvailableAudioTracks([
-          { id: 0, streamIndex: 0, label: 'Default / Stereo Audio', language: 'default' }
+          { id: 0, index: 0, streamIndex: 0, label: 'Default / Stereo Audio', language: 'default' }
         ]);
       }
     }
@@ -2034,7 +2102,7 @@ export default function LecturePlayer({
                       <div
                         key={at.streamIndex ?? at.index}
                         className={`column-option-row ${selectedAudioTrack === at.index ? 'selected' : ''}`}
-                        onClick={() => handleSelectAudioTrack(at)}
+                        onClick={() => handleUserSelectAudioTrack(at)}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span>{at.label}</span>
