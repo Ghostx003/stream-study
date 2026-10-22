@@ -458,6 +458,14 @@ app.post('/api/settings', (req, res) => {
 const clientDist = path.resolve(__dirname, '../../client/dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
+  app.get('/favicon.ico', (req, res) => {
+    const svgFavicon = path.join(clientDist, 'favicon.svg');
+    if (fs.existsSync(svgFavicon)) {
+      res.type('image/svg+xml').sendFile(svgFavicon);
+    } else {
+      res.status(204).end();
+    }
+  });
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) return next();
     res.sendFile(path.join(clientDist, 'index.html'));
