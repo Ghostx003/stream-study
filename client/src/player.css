@@ -691,6 +691,10 @@ video::-webkit-media-text-track-container {
   border-radius: 4px;
   outline: none;
   cursor: pointer;
+  touch-action: none;
+  padding: 8px 0;
+  margin: -8px 0;
+  background-clip: content-box;
   transition: height 0.15s ease;
 }
 .netflix-timeline-slider:hover,
@@ -712,6 +716,16 @@ video::-webkit-media-text-track-container {
 .netflix-timeline-slider:hover::-webkit-slider-thumb,
 .netflix-timeline-slider:active::-webkit-slider-thumb {
   transform: scale(1.35);
+}
+
+.netflix-timeline-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: #E50914;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(229, 9, 20, 0.9);
 }
 
 .netflix-timeline-bookmarks {

@@ -816,11 +816,16 @@ export default function LecturePlayer({
       return;
     }
 
-    // Do NOT intercept gestures if touch began inside the playlist sidebar or drawers
+    // Do NOT intercept gestures if touch began inside controls, timeline, playlist sidebar or drawers
     if (
       e.target.closest('.netflix-episodes-sidebar') ||
       e.target.closest('.netflix-drawer') ||
-      e.target.closest('.modal-container')
+      e.target.closest('.modal-container') ||
+      e.target.closest('.netflix-bottom-controls') ||
+      e.target.closest('.netflix-timeline-wrapper') ||
+      e.target.closest('.netflix-timeline-slider') ||
+      e.target.closest('.netflix-top-bar') ||
+      e.target.closest('.netflix-center-controls')
     ) {
       return;
     }
@@ -872,7 +877,12 @@ export default function LecturePlayer({
       !videoWrapperRef.current ||
       e.target.closest('.netflix-episodes-sidebar') ||
       e.target.closest('.netflix-drawer') ||
-      e.target.closest('.modal-container')
+      e.target.closest('.modal-container') ||
+      e.target.closest('.netflix-bottom-controls') ||
+      e.target.closest('.netflix-timeline-wrapper') ||
+      e.target.closest('.netflix-timeline-slider') ||
+      e.target.closest('.netflix-top-bar') ||
+      e.target.closest('.netflix-center-controls')
     ) {
       return;
     }
@@ -973,7 +983,12 @@ export default function LecturePlayer({
     if (
       e.target.closest('.netflix-episodes-sidebar') ||
       e.target.closest('.netflix-drawer') ||
-      e.target.closest('.modal-container')
+      e.target.closest('.modal-container') ||
+      e.target.closest('.netflix-bottom-controls') ||
+      e.target.closest('.netflix-timeline-wrapper') ||
+      e.target.closest('.netflix-timeline-slider') ||
+      e.target.closest('.netflix-top-bar') ||
+      e.target.closest('.netflix-center-controls')
     ) {
       return;
     }
@@ -1272,13 +1287,15 @@ export default function LecturePlayer({
     }
   }, []);
 
-  const handleTimelinePointerDown = () => {
+  const handleTimelinePointerDown = (e) => {
+    e?.stopPropagation?.();
     isScrubbingRef.current = true;
   };
 
   const handleTimelineInput = (e) => {
     isScrubbingRef.current = true;
     const val = parseFloat(e.target.value);
+    if (isNaN(val)) return;
     setCurrentTime(val);
 
     scrubTargetRef.current = val;
@@ -1292,28 +1309,28 @@ export default function LecturePlayer({
     }
   };
 
-  const handleTimelinePointerUp = (e) => {
+  const handleTimelineCommit = useCallback((targetVal) => {
     if (scrubRafRef.current) {
       cancelAnimationFrame(scrubRafRef.current);
       scrubRafRef.current = null;
     }
     isScrubbingRef.current = false;
-    const val = parseFloat(e.target.value);
-    seekTo(val);
-  };
+    const resolvedVal = (typeof targetVal === 'number' && !isNaN(targetVal))
+      ? targetVal
+      : (scrubTargetRef.current !== null && !isNaN(scrubTargetRef.current)
+          ? scrubTargetRef.current
+          : currentTime);
+    seekTo(resolvedVal);
+  }, [currentTime, seekTo]);
 
   const handleTimelineChange = (e) => {
-    if (scrubRafRef.current) {
-      cancelAnimationFrame(scrubRafRef.current);
-      scrubRafRef.current = null;
-    }
-    isScrubbingRef.current = false;
     const val = parseFloat(e.target.value);
-    seekTo(val);
+    handleTimelineCommit(val);
   };
 
   // Calculate duration formats
-  const effectiveDuration = duration || 1;
+  const totalDuration = duration || (videoRef.current ? videoRef.current.duration : 0) || 0;
+  const effectiveDuration = totalDuration > 0 ? totalDuration : 100;
   const remainingRealTime = Math.max(0, (effectiveDuration - currentTime) / Math.max(0.1, playbackRate));
   const remainingStandardTime = Math.max(0, effectiveDuration - currentTime);
   const timelineProgressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
@@ -1899,20 +1916,48 @@ export default function LecturePlayer({
             {/* Bottom Controls Container */}
             <div className="netflix-bottom-controls">
               {/* Timeline Container with Netflix Red Bar */}
-              <div className="netflix-timeline-wrapper">
+              <div
+                className="netflix-timeline-wrapper"
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
                 <input
                   type="range"
                   className="netflix-timeline-slider"
                   min="0"
-                  max={duration || 100}
+                  max={effectiveDuration}
                   step="0.1"
                   value={currentTime}
-                  onPointerDown={handleTimelinePointerDown}
-                  onPointerUp={handleTimelinePointerUp}
-                  onTouchStart={handleTimelinePointerDown}
-                  onTouchEnd={handleTimelinePointerUp}
-                  onMouseDown={handleTimelinePointerDown}
-                  onMouseUp={handleTimelinePointerUp}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    isScrubbingRef.current = true;
+                  }}
+                  onTouchMove={(e) => {
+                    e.stopPropagation();
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    handleTimelineCommit(parseFloat(e.target.value));
+                  }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    isScrubbingRef.current = true;
+                  }}
+                  onPointerUp={(e) => {
+                    e.stopPropagation();
+                    handleTimelineCommit(parseFloat(e.target.value));
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    isScrubbingRef.current = true;
+                  }}
+                  onMouseUp={(e) => {
+                    e.stopPropagation();
+                    handleTimelineCommit(parseFloat(e.target.value));
+                  }}
                   onInput={handleTimelineInput}
                   onChange={handleTimelineChange}
                   style={{
