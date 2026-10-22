@@ -216,8 +216,7 @@ video::-webkit-media-text-track-container {
 .netflix-top-bar,
 .netflix-center-controls,
 .netflix-bottom-controls,
-.netflix-skip-intro-btn,
-.unmute-btn {
+.netflix-skip-intro-btn {
   pointer-events: auto;
 }
 
@@ -358,45 +357,6 @@ video::-webkit-media-text-track-container {
   max-width: 100%;
   text-align: center;
   line-height: 1.2;
-}
-
-/* Unmute Overlay Button */
-.unmute-btn {
-  position: absolute;
-  top: 76px;
-  right: 24px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(18, 18, 18, 0.88);
-  color: #ffffff;
-  border: 1px solid rgba(229, 9, 20, 0.7);
-  padding: 8px 16px;
-  border-radius: 24px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  z-index: 40;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-  transition: all 0.2s ease;
-  pointer-events: auto;
-}
-
-.unmute-btn i {
-  color: #e50914;
-  font-size: 0.95rem;
-}
-
-.unmute-btn:hover {
-  background: #e50914;
-  border-color: #e50914;
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 6px 20px rgba(229, 9, 20, 0.4);
-}
-
-.unmute-btn:hover i {
-  color: #ffffff;
 }
 
 /* ==========================================================================

@@ -44,7 +44,6 @@ export default function LecturePlayer({
   const [playbackRate, setPlaybackRate] = useState(1.75);
   const [volume, setVolume] = useState(1.0);
   const [isMuted, setIsMuted] = useState(false);
-  const [showUnmuteBtn, setShowUnmuteBtn] = useState(false);
   const [timeDisplayMode, setTimeDisplayMode] = useState(() => {
     const saved = localStorage.getItem('courseflix_time_mode');
     return saved === 'standard' ? 'standard' : 'real';
@@ -314,6 +313,11 @@ export default function LecturePlayer({
             t.mode = 'showing';
           } else {
             t.mode = 'disabled';
+            if (t.cues) {
+              for (let c = t.cues.length - 1; c >= 0; c--) {
+                try { t.removeCue(t.cues[c]); } catch {}
+              }
+            }
           }
         }
       }
@@ -345,6 +349,26 @@ export default function LecturePlayer({
     setAvailableSubtitles(lecture.subtitles || []);
     setSelectedSubtitle(null);
     setSelectedAudioTrack(0);
+
+    // Thoroughly flush and wipe old browser text tracks and cues
+    if (videoRef.current) {
+      const oldTracks = videoRef.current.querySelectorAll('track');
+      oldTracks.forEach(t => t.remove());
+      if (videoRef.current.textTracks) {
+        for (let i = 0; i < videoRef.current.textTracks.length; i++) {
+          try {
+            const track = videoRef.current.textTracks[i];
+            track.mode = 'disabled';
+            if (track.cues) {
+              for (let c = track.cues.length - 1; c >= 0; c--) {
+                track.removeCue(track.cues[c]);
+              }
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
     if (altAudioRef.current) {
       altAudioRef.current.pause();
       altAudioRef.current.src = '';
@@ -428,11 +452,20 @@ export default function LecturePlayer({
     return () => {
       isMounted = false;
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      if (videoRef.current && videoRef.current.currentTime > 0) {
-        api.updateProgress(lecture.id, {
-          currentTime: videoRef.current.currentTime,
-          duration: videoRef.current.duration || 0
-        }).catch(() => {});
+      if (videoRef.current) {
+        if (videoRef.current.currentTime > 0) {
+          api.updateProgress(lecture.id, {
+            currentTime: videoRef.current.currentTime,
+            duration: videoRef.current.duration || 0
+          }).catch(() => {});
+        }
+        if (videoRef.current.textTracks) {
+          for (let i = 0; i < videoRef.current.textTracks.length; i++) {
+            try {
+              videoRef.current.textTracks[i].mode = 'disabled';
+            } catch (e) {}
+          }
+        }
       }
     };
   }, [lecture.id]);
@@ -518,10 +551,7 @@ export default function LecturePlayer({
         }
       }).catch(err => {
         if (err.name === 'NotAllowedError') {
-          videoRef.current.muted = true;
-          setIsMuted(true);
-          setShowUnmuteBtn(true);
-          videoRef.current.play().catch(() => {});
+          setIsPlaying(false);
         }
       });
     } else {
@@ -1038,10 +1068,7 @@ export default function LecturePlayer({
       setIsPlaying(true);
     }).catch((err) => {
       if (err.name === 'NotAllowedError') {
-        videoRef.current.muted = true;
-        setIsMuted(true);
-        setShowUnmuteBtn(true);
-        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+        setIsPlaying(false);
       }
     });
   };
@@ -1136,7 +1163,6 @@ export default function LecturePlayer({
     if (altAudioRef.current) {
       altAudioRef.current.muted = nextMuted;
     }
-    setShowUnmuteBtn(false);
     showToast?.(nextMuted ? 'Muted' : 'Unmuted');
   }, [isMuted, selectedAudioTrack, showToast]);
 
@@ -1202,8 +1228,18 @@ export default function LecturePlayer({
           toggleBrownNoise();
           break;
         case '?':
+        case '/':
           e.preventDefault();
           setShowShortcutsModal(prev => !prev);
+          break;
+        case 'Escape':
+          if (showShortcutsModal) {
+            e.preventDefault();
+            setShowShortcutsModal(false);
+          } else if (activeDrawer) {
+            e.preventDefault();
+            setActiveDrawer(null);
+          }
           break;
         default:
           break;
@@ -1303,6 +1339,7 @@ export default function LecturePlayer({
       >
         {/* Video Element with CSS Brightness & Aspect Ratio filter */}
         <video
+          key={lecture.id}
           ref={videoRef}
           src={streamUrl}
           className={`netflix-video-element aspect-${aspectMode}`}
@@ -1331,7 +1368,7 @@ export default function LecturePlayer({
         >
           {selectedSubtitle && (
             <track
-              key={selectedSubtitle.id}
+              key={`${lecture.id}_${selectedSubtitle.id || selectedSubtitle.src}`}
               kind="subtitles"
               src={selectedSubtitle.src}
               srcLang={selectedSubtitle.srclang || 'en'}
@@ -1347,27 +1384,6 @@ export default function LecturePlayer({
             />
           )}
         </video>
-
-        {/* Unmute Overlay Button */}
-        {showUnmuteBtn && (
-          <button
-            className="unmute-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (videoRef.current) {
-                videoRef.current.muted = false;
-                setIsMuted(false);
-                setShowUnmuteBtn(false);
-              }
-              if (altAudioRef.current && selectedAudioTrack > 0) {
-                altAudioRef.current.muted = false;
-              }
-            }}
-          >
-            <i className="fas fa-volume-up"></i>
-            <span>Click to Unmute</span>
-          </button>
-        )}
 
         {/* Double-Tap Seeking Wave Overlays */}
         <div className={`seek-overlay left ${leftSeekActive ? 'show-icon' : ''}`}>
