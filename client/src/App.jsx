@@ -231,6 +231,51 @@ export default function App() {
     window.location.hash = `#/play/${encodeURIComponent(lec.id)}?folder=${encodeURIComponent(currentPath)}`;
   };
 
+  // Shuffle play all content in the current folder / library
+  const handleShufflePlay = useCallback(async () => {
+    if (!activeRoot) {
+      showToast('No active library selected to shuffle', true);
+      return;
+    }
+
+    // If current folder has direct lectures and no subfolders, shuffle immediately
+    if (folders.length === 0 && lectures.length > 0) {
+      const shuffled = [...lectures];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const first = shuffled[0];
+      setLectures(shuffled);
+      setActiveLecture(first);
+      window.location.hash = `#/play/${encodeURIComponent(first.id)}?folder=${encodeURIComponent(currentPath)}`;
+      showToast(`Shuffled ${shuffled.length} videos`);
+      return;
+    }
+
+    // Otherwise, fetch all content recursively in this folder/library
+    showToast('Gathering and shuffling all videos...');
+    try {
+      const data = await api.scanAllLectures(activeRoot.id, currentPath);
+      if (!data || !data.lectures || data.lectures.length === 0) {
+        showToast('No videos found to shuffle in this folder', true);
+        return;
+      }
+      const shuffled = [...data.lectures];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const first = shuffled[0];
+      setLectures(shuffled);
+      setActiveLecture(first);
+      window.location.hash = `#/play/${encodeURIComponent(first.id)}?folder=${encodeURIComponent(first.parentFolder || currentPath)}`;
+      showToast(`Shuffled ${shuffled.length} videos. Playing: ${first.name}`);
+    } catch (err) {
+      showToast(`Shuffle failed: ${err.message}`, true);
+    }
+  }, [activeRoot, currentPath, folders.length, lectures, showToast]);
+
   // Toggle lecture completion checkbox
   const handleToggleCompleted = async (lectureId, newStatus) => {
     try {
@@ -468,8 +513,18 @@ export default function App() {
                 <div className="folder-header-summary">
                   <div className="folder-header-top">
                     <div>
-                      <div className="folder-header-title">
-                        {breadcrumbs[breadcrumbs.length - 1]?.name || activeRoot?.label}
+                      <div className="folder-header-title-row">
+                        <div className="folder-header-title">
+                          {breadcrumbs[breadcrumbs.length - 1]?.name || activeRoot?.label}
+                        </div>
+                        <button
+                          className="btn-shuffle-folder"
+                          onClick={handleShufflePlay}
+                          title="Shuffle play all content in this folder"
+                        >
+                          <i className="fas fa-random"></i>
+                          <span>Shuffle</span>
+                        </button>
                       </div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                         {currentPath ? `/${currentPath}` : 'Root Library'}
@@ -510,6 +565,7 @@ export default function App() {
               <CourseGrid
                 folders={folders}
                 onSelectFolder={handleSelectFolder}
+                onShuffle={handleShufflePlay}
                 title={currentPath ? 'Subfolders' : 'Subjects'}
               />
 

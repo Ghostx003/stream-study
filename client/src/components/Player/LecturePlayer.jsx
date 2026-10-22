@@ -17,11 +17,11 @@ export const SUB_FONT_OPTIONS = [
 ];
 
 export const SUB_POS_PRESETS = [
-  { id: 'bottom', label: 'Bottom (5px)', offset: 5 },
-  { id: 'low', label: 'Low (+40px)', offset: 40 },
-  { id: 'mid', label: 'Lower 3rd (+90px)', offset: 90 },
-  { id: 'center', label: 'Middle (+180px)', offset: 180 },
-  { id: 'top', label: 'Top (+320px)', offset: 320 },
+  { id: 'p3', label: '3px', offset: 3 },
+  { id: 'p5', label: '5px (Default)', offset: 5 },
+  { id: 'p8', label: '8px', offset: 8 },
+  { id: 'p12', label: '12px', offset: 12 },
+  { id: 'p17', label: '17px', offset: 17 },
 ];
 
 export const findPreferredAudioTrack = (tracks, preferredLang = 'eng') => {
@@ -86,6 +86,11 @@ export default function LecturePlayer({
   const isPinchingRef = useRef(false);
   const lastPinchTimeRef = useRef(0);
 
+  // Real-time timeline scrubbing refs
+  const isScrubbingRef = useRef(false);
+  const scrubTargetRef = useRef(null);
+  const scrubRafRef = useRef(null);
+
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(lecture.currentTime || 0);
@@ -119,14 +124,15 @@ export default function LecturePlayer({
   const [availableSubtitles, setAvailableSubtitles] = useState(lecture.subtitles || []);
   const [selectedSubtitle, setSelectedSubtitle] = useState(null);
   const [subFontSize, setSubFontSize] = useState(() => {
-    return localStorage.getItem('courseflix_sub_fontsize') || 'md';
+    return localStorage.getItem('courseflix_sub_fontsize') || 'lg';
   });
   const [subFontId, setSubFontId] = useState(() => {
     return localStorage.getItem('courseflix_sub_font') || 'comic';
   });
   const [subVerticalOffset, setSubVerticalOffset] = useState(() => {
     const saved = localStorage.getItem('courseflix_sub_offset');
-    return saved !== null && !isNaN(parseInt(saved, 10)) ? parseInt(saved, 10) : 5;
+    const val = saved !== null && !isNaN(parseInt(saved, 10)) ? parseInt(saved, 10) : 5;
+    return Math.max(3, Math.min(17, val));
   });
   const activeSubFont = SUB_FONT_OPTIONS.find(f => f.id === subFontId) || SUB_FONT_OPTIONS[0];
   const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
@@ -446,7 +452,7 @@ export default function LecturePlayer({
     }
   }, [playbackRate]);
 
-  // Apply vertical position to active text tracks if browser respects VTTCue.line
+  // Apply vertical position to active text tracks
   useEffect(() => {
     if (!videoRef.current || !videoRef.current.textTracks) return;
     const tracks = videoRef.current.textTracks;
@@ -456,14 +462,8 @@ export default function LecturePlayer({
         for (let j = 0; j < track.cues.length; j++) {
           const cue = track.cues[j];
           try {
-            if (subVerticalOffset <= 5) {
-              cue.snapToLines = true;
-              cue.line = 'auto';
-            } else {
-              cue.snapToLines = false;
-              const linePct = Math.max(5, Math.min(95, 90 - Math.round((subVerticalOffset / 400) * 80)));
-              cue.line = linePct;
-            }
+            cue.snapToLines = true;
+            cue.line = 'auto';
           } catch (e) {}
         }
       }
@@ -1053,6 +1053,7 @@ export default function LecturePlayer({
   // Video element events
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
+    if (isScrubbingRef.current) return;
     const cur = videoRef.current.currentTime;
     const dur = videoRef.current.duration || duration || 0;
     setCurrentTime(cur);
@@ -1251,19 +1252,62 @@ export default function LecturePlayer({
     playNextLecture();
   };
 
-  // Timeline scrub handling
-  const handleTimelineInput = (e) => {
-    const val = parseFloat(e.target.value);
-    setCurrentTime(val);
+  // Smooth real-time video seeking
+  const performVideoSeek = useCallback((targetTime) => {
     if (videoRef.current) {
-      videoRef.current.currentTime = val;
+      if ('fastSeek' in videoRef.current) {
+        try {
+          videoRef.current.fastSeek(targetTime);
+        } catch {
+          videoRef.current.currentTime = targetTime;
+        }
+      } else {
+        videoRef.current.currentTime = targetTime;
+      }
     }
     if (altAudioRef.current && altAudioRef.current.src) {
-      altAudioRef.current.currentTime = val;
+      try {
+        altAudioRef.current.currentTime = targetTime;
+      } catch {}
+    }
+  }, []);
+
+  const handleTimelinePointerDown = () => {
+    isScrubbingRef.current = true;
+  };
+
+  const handleTimelineInput = (e) => {
+    isScrubbingRef.current = true;
+    const val = parseFloat(e.target.value);
+    setCurrentTime(val);
+
+    scrubTargetRef.current = val;
+    if (!scrubRafRef.current) {
+      scrubRafRef.current = requestAnimationFrame(() => {
+        scrubRafRef.current = null;
+        if (scrubTargetRef.current !== null) {
+          performVideoSeek(scrubTargetRef.current);
+        }
+      });
     }
   };
 
+  const handleTimelinePointerUp = (e) => {
+    if (scrubRafRef.current) {
+      cancelAnimationFrame(scrubRafRef.current);
+      scrubRafRef.current = null;
+    }
+    isScrubbingRef.current = false;
+    const val = parseFloat(e.target.value);
+    seekTo(val);
+  };
+
   const handleTimelineChange = (e) => {
+    if (scrubRafRef.current) {
+      cancelAnimationFrame(scrubRafRef.current);
+      scrubRafRef.current = null;
+    }
+    isScrubbingRef.current = false;
     const val = parseFloat(e.target.value);
     seekTo(val);
   };
@@ -1863,6 +1907,12 @@ export default function LecturePlayer({
                   max={duration || 100}
                   step="0.1"
                   value={currentTime}
+                  onPointerDown={handleTimelinePointerDown}
+                  onPointerUp={handleTimelinePointerUp}
+                  onTouchStart={handleTimelinePointerDown}
+                  onTouchEnd={handleTimelinePointerUp}
+                  onMouseDown={handleTimelinePointerDown}
+                  onMouseUp={handleTimelinePointerUp}
                   onInput={handleTimelineInput}
                   onChange={handleTimelineChange}
                   style={{
@@ -2303,25 +2353,25 @@ export default function LecturePlayer({
                 <div className="sub-pos-slider-row">
                   <button
                     className="sub-pos-step-btn"
-                    title="Nudge Down 10px"
+                    title="Nudge Down 1px"
                     onClick={() => {
-                      const next = Math.max(0, subVerticalOffset - 10);
+                      const next = Math.max(3, subVerticalOffset - 1);
                       setSubVerticalOffset(next);
                       localStorage.setItem('courseflix_sub_offset', next.toString());
                     }}
                   >
-                    <i className="fas fa-chevron-down"></i> -10px
+                    <i className="fas fa-chevron-down"></i> -1px
                   </button>
 
                   <input
                     type="range"
-                    min="0"
-                    max="400"
-                    step="5"
+                    min="3"
+                    max="17"
+                    step="1"
                     value={subVerticalOffset}
                     className="sub-pos-range"
                     onChange={(e) => {
-                      const val = parseInt(e.target.value, 10) || 0;
+                      const val = Math.max(3, Math.min(17, parseInt(e.target.value, 10) || 5));
                       setSubVerticalOffset(val);
                       localStorage.setItem('courseflix_sub_offset', val.toString());
                     }}
@@ -2329,14 +2379,14 @@ export default function LecturePlayer({
 
                   <button
                     className="sub-pos-step-btn"
-                    title="Nudge Up 10px"
+                    title="Nudge Up 1px"
                     onClick={() => {
-                      const next = Math.min(400, subVerticalOffset + 10);
+                      const next = Math.min(17, subVerticalOffset + 1);
                       setSubVerticalOffset(next);
                       localStorage.setItem('courseflix_sub_offset', next.toString());
                     }}
                   >
-                    <i className="fas fa-chevron-up"></i> +10px
+                    <i className="fas fa-chevron-up"></i> +1px
                   </button>
 
                   {subVerticalOffset !== 5 && (
@@ -2370,7 +2420,7 @@ export default function LecturePlayer({
                     fontSize: subFontSize === 'sm' ? '1.05rem' :
                               subFontSize === 'lg' ? '1.75rem' :
                               subFontSize === 'xl' ? '2.25rem' : '1.35rem',
-                    transform: `translateY(-${Math.min(30, Math.round(subVerticalOffset / 10))}px)`
+                    transform: `translateY(-${subVerticalOffset}px)`
                   }}
                 >
                   H-h-hey! Not this way!

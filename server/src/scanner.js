@@ -442,3 +442,127 @@ export async function scanFolder(root, relativeSubPath = '') {
   scanResultCache.set(cacheKey, { timestamp: Date.now(), data: result });
   return result;
 }
+
+/**
+ * Recursively scans all playable video lectures in a folder and all its subfolders.
+ */
+export async function scanAllLectures(root, relativeSubPath = '') {
+  const rootPath = root.path;
+  const targetDir = resolveSecurePath(rootPath, relativeSubPath);
+  if (!fs.existsSync(targetDir)) return [];
+
+  const lectures = [];
+
+  function traverse(currentDir, currentRelPath) {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    const subDirs = [];
+    const videoFiles = [];
+    const subFiles = [];
+
+    for (const entry of entries) {
+      if (isIgnored(entry.name)) continue;
+      if (entry.isDirectory()) {
+        subDirs.push(entry.name);
+      } else if (entry.isFile()) {
+        if (isVideoFile(entry.name)) {
+          videoFiles.push(entry.name);
+        } else if (isSubtitleFile(entry.name)) {
+          subFiles.push(entry.name);
+        }
+      }
+    }
+
+    videoFiles.sort(naturalCompare);
+    for (const videoName of videoFiles) {
+      const videoRelPath = currentRelPath ? `${currentRelPath}/${videoName}` : videoName;
+      const fullVideoPath = path.join(currentDir, videoName);
+      const lectureKey = generateLectureKey(root.id, videoRelPath);
+      const progress = configManager.getLectureProgress(lectureKey);
+
+      let duration = progress.duration || 0;
+      if (!duration) {
+        try {
+          const vStat = fs.statSync(fullVideoPath);
+          const cacheKey = `${fullVideoPath}::${vStat.size}::${vStat.mtimeMs}`;
+          if (metadataService.cache[cacheKey] && metadataService.cache[cacheKey].duration) {
+            duration = metadataService.cache[cacheKey].duration;
+          }
+        } catch {}
+      }
+
+      const completed = !!progress.completed;
+      const currentTime = progress.currentTime || 0;
+      const remainingTime = completed ? 0 : Math.max(0, duration - currentTime);
+
+      const videoBase = path.parse(videoName).name.toLowerCase();
+      const subtitles = [];
+      for (const subName of subFiles) {
+        const subBase = path.parse(subName).name.toLowerCase();
+        if (subBase.startsWith(videoBase) || subBase === videoBase || videoFiles.length === 1) {
+          const langMatch = subName.match(/\.([a-z]{2,3})\.[^.]+$/i);
+          const langCode = langMatch ? langMatch[1].toLowerCase() : 'en';
+          const label = langMatch ? `Subtitle (${langMatch[1].toUpperCase()})` : `${subName}`;
+          subtitles.push({
+            id: subName,
+            fileName: subName,
+            label,
+            srclang: langCode,
+            src: `/api/subtitles?key=${encodeURIComponent(lectureKey)}&file=${encodeURIComponent(subName)}`
+          });
+        }
+      }
+
+      // Check for embedded subtitles in cache
+      try {
+        const vStat = fs.statSync(fullVideoPath);
+        const cacheKey = `${fullVideoPath}::${vStat.size}::${vStat.mtimeMs}`;
+        const cached = metadataService.cache[cacheKey];
+        if (cached && cached.subtitles && cached.subtitles.length > 0) {
+          for (const s of cached.subtitles) {
+            const subId = `embedded_${s.streamIndex}`;
+            if (!subtitles.some(x => x.id === subId || x.streamIndex === s.streamIndex)) {
+              subtitles.push({
+                id: subId,
+                isEmbedded: true,
+                streamIndex: s.streamIndex,
+                label: s.label,
+                srclang: s.language || 'en',
+                src: `/api/subtitles/embedded?key=${encodeURIComponent(lectureKey)}&streamIndex=${s.streamIndex}`
+              });
+            }
+          }
+        }
+      } catch (e) {}
+
+      lectures.push({
+        id: lectureKey,
+        name: path.parse(videoName).name,
+        fileName: videoName,
+        relativePath: videoRelPath,
+        parentFolder: currentRelPath,
+        duration,
+        currentTime,
+        remainingTime,
+        completed,
+        bookmarks: progress.bookmarks || [],
+        lastWatched: progress.lastWatched || null,
+        subtitles
+      });
+    }
+
+    subDirs.sort(naturalCompare);
+    for (const dirName of subDirs) {
+      const nextRel = currentRelPath ? `${currentRelPath}/${dirName}` : dirName;
+      traverse(path.join(currentDir, dirName), nextRel);
+    }
+  }
+
+  traverse(targetDir, relativeSubPath);
+  return lectures;
+}

@@ -54,6 +54,12 @@ export const api = {
     if (subPath) params.append('path', subPath);
     return fetchJson(`/scan?${params.toString()}`);
   },
+  scanAllLectures: (rootId = null, subPath = '') => {
+    const params = new URLSearchParams();
+    if (rootId) params.append('rootId', rootId);
+    if (subPath) params.append('path', subPath);
+    return fetchJson(`/scan/all?${params.toString()}`);
+  },
 
   // Video streaming stream URL (Direct native byte-range streaming without conversion)
   getVideoStreamUrl: (key) => `${API_BASE}/stream?key=${encodeURIComponent(key)}`,

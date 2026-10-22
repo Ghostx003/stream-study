@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 
 import { getLanAddresses, checkCandidatePorts, getTailscaleIp } from './network.js';
 import { configManager } from './configManager.js';
-import { scanFolder, resolveSecurePath, generateLectureKey, invalidateScanCache } from './scanner.js';
+import { scanFolder, scanAllLectures, resolveSecurePath, generateLectureKey, invalidateScanCache } from './scanner.js';
 import { streamVideoFile, serveSubtitleFile, streamRemuxFile, serveEmbeddedSubtitle, serveAudioTrack, prewarmAudioTrack } from './streamer.js';
 import { metadataService } from './metadata.js';
 
@@ -193,6 +193,28 @@ app.get('/api/scan', async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/scan/all', async (req, res) => {
+  try {
+    let root = null;
+    if (req.query.rootId) {
+      root = configManager.getRoots().find(r => r.id === req.query.rootId);
+    }
+    if (!root) {
+      root = configManager.getActiveRoot();
+    }
+
+    if (!root || !fs.existsSync(root.path)) {
+      return res.json({ lectures: [] });
+    }
+
+    const subPath = req.query.path || '';
+    const lectures = await scanAllLectures(root, subPath);
+    res.json({ lectures });
+  } catch (err) {
+    res.status(500).json({ error: err.message, lectures: [] });
   }
 });
 
