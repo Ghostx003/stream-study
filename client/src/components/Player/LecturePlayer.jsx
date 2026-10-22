@@ -5,6 +5,25 @@ import ShortcutsModal from './ShortcutsModal';
 
 const PRESET_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5];
 
+export const SUB_FONT_OPTIONS = [
+  { id: 'comic', label: 'Comic Sans', font: '"Comic Sans MS", "Comic Sans", "Chalkboard SE", "Comic Neue", cursive, sans-serif' },
+  { id: 'arial', label: 'Arial', font: 'Arial, "Helvetica Neue", Helvetica, sans-serif' },
+  { id: 'roboto', label: 'Roboto / Modern', font: '"Roboto", "Segoe UI", system-ui, -apple-system, sans-serif' },
+  { id: 'montserrat', label: 'Montserrat', font: '"Montserrat", "Outfit", "Inter", sans-serif' },
+  { id: 'trebuchet', label: 'Trebuchet', font: '"Trebuchet MS", "Lucida Sans", sans-serif' },
+  { id: 'impact', label: 'Impact / Bold', font: 'Impact, "Arial Black", sans-serif' },
+  { id: 'monospace', label: 'Monospace', font: '"Consolas", "Courier New", monospace' },
+  { id: 'georgia', label: 'Georgia / Serif', font: 'Georgia, "Times New Roman", serif' },
+];
+
+export const SUB_POS_PRESETS = [
+  { id: 'bottom', label: 'Bottom (0px)', offset: 0 },
+  { id: 'low', label: 'Low (+40px)', offset: 40 },
+  { id: 'mid', label: 'Lower 3rd (+90px)', offset: 90 },
+  { id: 'center', label: 'Middle (+180px)', offset: 180 },
+  { id: 'top', label: 'Top (+320px)', offset: 320 },
+];
+
 const trimTitle = (str, maxLen = 42) => {
   if (!str) return '';
   const trimmed = str.trim();
@@ -72,6 +91,14 @@ export default function LecturePlayer({
   const [subFontSize, setSubFontSize] = useState(() => {
     return localStorage.getItem('courseflix_sub_fontsize') || 'md';
   });
+  const [subFontId, setSubFontId] = useState(() => {
+    return localStorage.getItem('courseflix_sub_font') || 'comic';
+  });
+  const [subVerticalOffset, setSubVerticalOffset] = useState(() => {
+    const saved = localStorage.getItem('courseflix_sub_offset');
+    return saved !== null && !isNaN(parseInt(saved, 10)) ? parseInt(saved, 10) : 0;
+  });
+  const activeSubFont = SUB_FONT_OPTIONS.find(f => f.id === subFontId) || SUB_FONT_OPTIONS[0];
   const [availableAudioTracks, setAvailableAudioTracks] = useState([]);
   const [selectedAudioTrack, setSelectedAudioTrack] = useState(0);
 
@@ -205,6 +232,8 @@ export default function LecturePlayer({
       // Revert to primary audio track in native video element
       videoRef.current.muted = isMuted;
       videoRef.current.volume = volume;
+      videoRef.current.playbackRate = playbackRate;
+      videoRef.current.defaultPlaybackRate = playbackRate;
       if (altAudioRef.current) {
         altAudioRef.current.oncanplay = null;
         altAudioRef.current.onerror = null;
@@ -225,12 +254,21 @@ export default function LecturePlayer({
         audioEl.src = audioUrl;
         audioEl.volume = volume;
         audioEl.muted = isMuted;
-        audioEl.playbackRate = videoRef.current.playbackRate || playbackRate;
+        const curRate = videoRef.current ? videoRef.current.playbackRate : playbackRate;
+        audioEl.playbackRate = curRate;
+        audioEl.defaultPlaybackRate = curRate;
 
         let hasStarted = false;
         const syncAndPlay = () => {
           if (hasStarted) return;
           hasStarted = true;
+          const targetRate = videoRef.current ? videoRef.current.playbackRate : playbackRate;
+          audioEl.playbackRate = targetRate;
+          audioEl.defaultPlaybackRate = targetRate;
+          if (videoRef.current) {
+            videoRef.current.playbackRate = targetRate;
+            videoRef.current.defaultPlaybackRate = targetRate;
+          }
           try {
             audioEl.currentTime = videoRef.current ? videoRef.current.currentTime : curTime;
           } catch (e) {
@@ -341,6 +379,46 @@ export default function LecturePlayer({
       }
     }).catch(() => {});
   }, []);
+
+  // Synchronize playbackRate across video, altAudio, and native defaults
+  useEffect(() => {
+    if (videoRef.current) {
+      if (videoRef.current.playbackRate !== playbackRate) {
+        videoRef.current.playbackRate = playbackRate;
+      }
+      videoRef.current.defaultPlaybackRate = playbackRate;
+    }
+    if (altAudioRef.current) {
+      if (altAudioRef.current.playbackRate !== playbackRate) {
+        altAudioRef.current.playbackRate = playbackRate;
+      }
+      altAudioRef.current.defaultPlaybackRate = playbackRate;
+    }
+  }, [playbackRate]);
+
+  // Apply vertical position to active text tracks if browser respects VTTCue.line
+  useEffect(() => {
+    if (!videoRef.current || !videoRef.current.textTracks) return;
+    const tracks = videoRef.current.textTracks;
+    for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
+      if (track.cues) {
+        for (let j = 0; j < track.cues.length; j++) {
+          const cue = track.cues[j];
+          try {
+            if (subVerticalOffset === 0) {
+              cue.snapToLines = true;
+              cue.line = 'auto';
+            } else {
+              cue.snapToLines = false;
+              const linePct = Math.max(5, Math.min(95, 90 - Math.round((subVerticalOffset / 400) * 80)));
+              cue.line = linePct;
+            }
+          } catch (e) {}
+        }
+      }
+    }
+  }, [subVerticalOffset, selectedSubtitle]);
 
   // Update lecture data when lecture changes
   useEffect(() => {
@@ -925,8 +1003,11 @@ export default function LecturePlayer({
 
     // Synchronize and drift check alternate audio track if active
     if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && !videoRef.current.paused) {
+      if (Math.abs(altAudioRef.current.playbackRate - videoRef.current.playbackRate) > 0.01) {
+        altAudioRef.current.playbackRate = videoRef.current.playbackRate;
+      }
       const diff = Math.abs(altAudioRef.current.currentTime - cur);
-      if (diff > 0.3) {
+      if (diff > 0.25) {
         try {
           altAudioRef.current.currentTime = cur;
         } catch {}
@@ -948,7 +1029,15 @@ export default function LecturePlayer({
 
   const handlePlay = () => {
     setIsPlaying(true);
+    if (videoRef.current) {
+      if (videoRef.current.playbackRate !== playbackRate) {
+        videoRef.current.playbackRate = playbackRate;
+      }
+      videoRef.current.defaultPlaybackRate = playbackRate;
+    }
     if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && videoRef.current) {
+      altAudioRef.current.playbackRate = videoRef.current.playbackRate;
+      altAudioRef.current.defaultPlaybackRate = videoRef.current.playbackRate;
       try {
         altAudioRef.current.currentTime = videoRef.current.currentTime;
       } catch {}
@@ -980,6 +1069,7 @@ export default function LecturePlayer({
     if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && videoRef.current) {
       try {
         altAudioRef.current.currentTime = videoRef.current.currentTime;
+        altAudioRef.current.playbackRate = videoRef.current.playbackRate;
       } catch {}
       if (!videoRef.current.paused && altAudioRef.current.paused) {
         altAudioRef.current.play().catch(() => {});
@@ -995,8 +1085,16 @@ export default function LecturePlayer({
 
   const handlePlaying = () => {
     setIsPlaying(true);
+    if (videoRef.current) {
+      if (videoRef.current.playbackRate !== playbackRate) {
+        videoRef.current.playbackRate = playbackRate;
+      }
+      videoRef.current.defaultPlaybackRate = playbackRate;
+    }
     if (selectedAudioTrack > 0 && altAudioRef.current && altAudioRef.current.src && videoRef.current) {
-      if (Math.abs(altAudioRef.current.currentTime - videoRef.current.currentTime) > 0.25) {
+      altAudioRef.current.playbackRate = videoRef.current.playbackRate;
+      altAudioRef.current.defaultPlaybackRate = videoRef.current.playbackRate;
+      if (Math.abs(altAudioRef.current.currentTime - videoRef.current.currentTime) > 0.2) {
         try {
           altAudioRef.current.currentTime = videoRef.current.currentTime;
         } catch {}
@@ -1008,8 +1106,15 @@ export default function LecturePlayer({
   };
 
   const handleRateChange = () => {
-    if (altAudioRef.current && videoRef.current) {
-      altAudioRef.current.playbackRate = videoRef.current.playbackRate;
+    if (videoRef.current) {
+      const rate = videoRef.current.playbackRate;
+      if (altAudioRef.current && Math.abs(altAudioRef.current.playbackRate - rate) > 0.01) {
+        altAudioRef.current.playbackRate = rate;
+        altAudioRef.current.defaultPlaybackRate = rate;
+      }
+      if (Math.abs(rate - playbackRate) > 0.01) {
+        setPlaybackRate(rate);
+      }
     }
   };
 
@@ -1024,6 +1129,11 @@ export default function LecturePlayer({
     }
 
     videoRef.current.playbackRate = playbackRate;
+    videoRef.current.defaultPlaybackRate = playbackRate;
+    if (altAudioRef.current) {
+      altAudioRef.current.playbackRate = playbackRate;
+      altAudioRef.current.defaultPlaybackRate = playbackRate;
+    }
 
     // Detect browser native audio tracks if exposed and we don't have tracks from server
     if (availableAudioTracks.length === 0) {
@@ -1284,14 +1394,22 @@ export default function LecturePlayer({
 
   return (
     <div className={`netflix-player-root sub-size-${subFontSize} ${activeDrawer === 'episodes' ? 'sidebar-open' : ''}`} ref={containerRef}>
-      {/* Dynamic Subtitle Font Size Override */}
+      {/* Dynamic Subtitle Font & Position Style Override */}
       <style>{`
         ::cue, video::cue {
+          font-family: ${activeSubFont.font} !important;
           font-size: ${
             subFontSize === 'sm' ? '1.05rem' :
             subFontSize === 'lg' ? '1.85rem' :
             subFontSize === 'xl' ? '2.35rem' : '1.38rem'
           } !important;
+          transform: translateY(-${subVerticalOffset}px) !important;
+        }
+        video::-webkit-media-text-track-display {
+          transform: translateY(-${subVerticalOffset}px) !important;
+        }
+        video::-webkit-media-text-track-container {
+          bottom: ${subVerticalOffset}px !important;
         }
       `}</style>
       {/* Background Brown Noise Audio */}
@@ -1309,6 +1427,13 @@ export default function LecturePlayer({
         playsInline
         preload="auto"
         style={{ display: 'none' }}
+        onRateChange={() => {
+          if (altAudioRef.current && videoRef.current) {
+            if (Math.abs(altAudioRef.current.playbackRate - videoRef.current.playbackRate) > 0.01) {
+              altAudioRef.current.playbackRate = videoRef.current.playbackRate;
+            }
+          }
+        }}
       />
 
       {/* Main Video Wrapper */}
@@ -1368,7 +1493,18 @@ export default function LecturePlayer({
               onLoad={() => {
                 if (videoRef.current && videoRef.current.textTracks) {
                   for (let i = 0; i < videoRef.current.textTracks.length; i++) {
-                    videoRef.current.textTracks[i].mode = 'showing';
+                    const track = videoRef.current.textTracks[i];
+                    track.mode = 'showing';
+                    if (track.cues && subVerticalOffset > 0) {
+                      for (let j = 0; j < track.cues.length; j++) {
+                        try {
+                          const cue = track.cues[j];
+                          cue.snapToLines = false;
+                          const linePct = Math.max(5, Math.min(95, 90 - Math.round((subVerticalOffset / 400) * 80)));
+                          cue.line = linePct;
+                        } catch (e) {}
+                      }
+                    }
                   }
                 }
               }}
@@ -2012,12 +2148,40 @@ export default function LecturePlayer({
               </button>
             </div>
 
-            <div className="netflix-drawer-content" style={{ maxHeight: '68vh', overflowY: 'auto', paddingBottom: '20px' }}>
-              {/* Subtitle Font Size Presets */}
+            <div className="netflix-drawer-content" style={{ maxHeight: '72vh', overflowY: 'auto', paddingBottom: '24px' }}>
+              {/* 1. Subtitle Font Family Selection */}
               <div className="sub-settings-section">
                 <div className="sub-settings-label">
-                  <span>SUBTITLE FONT SIZE</span>
-                  <span style={{ color: '#E50914', fontSize: '0.8rem' }}>{subFontSize.toUpperCase()}</span>
+                  <span>FONT FAMILY</span>
+                  <span style={{ color: '#E50914', fontSize: '0.8rem', fontWeight: '700' }}>
+                    {activeSubFont.label}
+                  </span>
+                </div>
+                <div className="sub-font-pills">
+                  {SUB_FONT_OPTIONS.map((f) => (
+                    <div
+                      key={f.id}
+                      className={`sub-font-pill ${subFontId === f.id ? 'active' : ''}`}
+                      style={{ fontFamily: f.font }}
+                      onClick={() => {
+                        setSubFontId(f.id);
+                        localStorage.setItem('courseflix_sub_font', f.id);
+                        showToast?.(`Font: ${f.label}`);
+                      }}
+                    >
+                      {f.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Subtitle Font Size Presets */}
+              <div className="sub-settings-section" style={{ marginTop: '16px' }}>
+                <div className="sub-settings-label">
+                  <span>FONT SIZE</span>
+                  <span style={{ color: '#E50914', fontSize: '0.8rem', fontWeight: '700' }}>
+                    {subFontSize.toUpperCase()}
+                  </span>
                 </div>
                 <div className="sub-size-pills">
                   {[
@@ -2039,37 +2203,124 @@ export default function LecturePlayer({
                     </div>
                   ))}
                 </div>
+              </div>
 
-                {/* Subtitle Style Info */}
-                <div style={{ marginTop: '12px', fontSize: '0.78rem', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <i className="fas fa-info-circle" style={{ color: '#E50914' }}></i>
-                  <span>Font: Comic Sans MS • Color: White • Outline: Black • Background: None</span>
+              {/* 3. Subtitle Vertical Position (Move Up / Down) */}
+              <div className="sub-settings-section" style={{ marginTop: '16px' }}>
+                <div className="sub-settings-label">
+                  <span>VERTICAL POSITION</span>
+                  <span style={{ color: '#E50914', fontSize: '0.8rem', fontWeight: '700' }}>
+                    {subVerticalOffset === 0 ? 'Bottom (0px)' : `+${subVerticalOffset}px UP`}
+                  </span>
                 </div>
 
-                {/* Anime Subtitle Live Preview Box */}
-                <div className="sub-preview-card">
-                  <div
-                    className="sub-preview-text"
-                    style={{
-                      fontSize: subFontSize === 'sm' ? '1.05rem' :
-                                subFontSize === 'lg' ? '1.75rem' :
-                                subFontSize === 'xl' ? '2.25rem' : '1.35rem'
+                {/* Quick Presets */}
+                <div className="sub-pos-pills">
+                  {SUB_POS_PRESETS.map((p) => (
+                    <div
+                      key={p.id}
+                      className={`sub-pos-pill ${subVerticalOffset === p.offset ? 'active' : ''}`}
+                      onClick={() => {
+                        setSubVerticalOffset(p.offset);
+                        localStorage.setItem('courseflix_sub_offset', p.offset.toString());
+                        showToast?.(`Position: ${p.label}`);
+                      }}
+                    >
+                      {p.label}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Fine-tune slider and step buttons */}
+                <div className="sub-pos-slider-row">
+                  <button
+                    className="sub-pos-step-btn"
+                    title="Nudge Down 10px"
+                    onClick={() => {
+                      const next = Math.max(0, subVerticalOffset - 10);
+                      setSubVerticalOffset(next);
+                      localStorage.setItem('courseflix_sub_offset', next.toString());
                     }}
                   >
-                    H-h-hey! Not this way!
-                  </div>
-                </div>
+                    <i className="fas fa-chevron-down"></i> -10px
+                  </button>
 
-                {/* Shortcut button back to track selection */}
-                <button
-                  className="sub-gear-jump-btn"
-                  onClick={() => setActiveDrawer('audioSub')}
-                  style={{ marginTop: '16px' }}
-                >
-                  <i className="fas fa-closed-captioning"></i>
-                  <span>Switch Audio / Subtitle Tracks</span>
-                </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="400"
+                    step="5"
+                    value={subVerticalOffset}
+                    className="sub-pos-range"
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10) || 0;
+                      setSubVerticalOffset(val);
+                      localStorage.setItem('courseflix_sub_offset', val.toString());
+                    }}
+                  />
+
+                  <button
+                    className="sub-pos-step-btn"
+                    title="Nudge Up 10px"
+                    onClick={() => {
+                      const next = Math.min(400, subVerticalOffset + 10);
+                      setSubVerticalOffset(next);
+                      localStorage.setItem('courseflix_sub_offset', next.toString());
+                    }}
+                  >
+                    <i className="fas fa-chevron-up"></i> +10px
+                  </button>
+
+                  {subVerticalOffset > 0 && (
+                    <button
+                      className="sub-pos-reset-btn"
+                      title="Reset position to bottom"
+                      onClick={() => {
+                        setSubVerticalOffset(0);
+                        localStorage.setItem('courseflix_sub_offset', '0');
+                        showToast?.('Position: Reset to Bottom');
+                      }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Subtitle Style Info */}
+              <div style={{ marginTop: '16px', fontSize: '0.78rem', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <i className="fas fa-info-circle" style={{ color: '#E50914' }}></i>
+                <span>Active: {activeSubFont.label} • {subFontSize.toUpperCase()} • {subVerticalOffset}px offset</span>
+              </div>
+
+              {/* Anime Subtitle Live Preview Box */}
+              <div className="sub-preview-card" style={{ position: 'relative', overflow: 'hidden' }}>
+                <div
+                  className="sub-preview-text"
+                  style={{
+                    fontFamily: activeSubFont.font,
+                    fontSize: subFontSize === 'sm' ? '1.05rem' :
+                              subFontSize === 'lg' ? '1.75rem' :
+                              subFontSize === 'xl' ? '2.25rem' : '1.35rem',
+                    transform: `translateY(-${Math.min(30, Math.round(subVerticalOffset / 10))}px)`
+                  }}
+                >
+                  H-h-hey! Not this way!
+                </div>
+                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+                  Live Preview: Font & Position
+                </div>
+              </div>
+
+              {/* Shortcut button back to track selection */}
+              <button
+                className="sub-gear-jump-btn"
+                onClick={() => setActiveDrawer('audioSub')}
+                style={{ marginTop: '16px' }}
+              >
+                <i className="fas fa-closed-captioning"></i>
+                <span>Switch Audio / Subtitle Tracks</span>
+              </button>
             </div>
           </div>
         )}
