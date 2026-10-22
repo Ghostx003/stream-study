@@ -47,6 +47,8 @@ export default function App() {
 
   const activeRootRef = useRef(null);
   activeRootRef.current = activeRoot;
+  const folderCacheRef = useRef(new Map());
+  const isSwitchingRootRef = useRef(false);
 
   // Helper for displaying toast notifications
   const showToast = useCallback((message, isError = false) => {
@@ -56,8 +58,55 @@ export default function App() {
     }, 3200);
   }, []);
 
-  // Load contents of a folder
-  const loadFolderContents = useCallback(async (rootId, path = '') => {
+  const computeAggregatedStats = (data) => {
+    if (!data) return null;
+    let computedStats = data.stats;
+    if (computedStats && computedStats.totalLectures === 0 && data.folders && data.folders.length > 0) {
+      const totalVids = data.folders.reduce((acc, f) => acc + (f.videoCount || 0), 0);
+      const totalDur = data.folders.reduce((acc, f) => acc + (f.totalDuration || 0), 0);
+      const compCount = data.folders.reduce((acc, f) => acc + (f.completedCount || 0), 0);
+      const remDur = data.folders.reduce((acc, f) => acc + (f.remainingDuration || 0), 0);
+      const compDur = Math.max(0, totalDur - remDur);
+      const pct = totalVids > 0 ? Math.round((compCount / totalVids) * 100) : 0;
+      computedStats = {
+        ...computedStats,
+        totalLectures: totalVids,
+        totalDuration: totalDur,
+        completedLectures: compCount,
+        completedDuration: compDur,
+        remainingDuration: remDur,
+        completionPercentage: pct
+      };
+    }
+    return computedStats || null;
+  };
+
+  // Load contents of a folder with instantaneous client cache and background revalidation
+  const loadFolderContents = useCallback(async (rootId, path = '', useCache = true) => {
+    const cacheKey = `${rootId}::${path}`;
+    if (useCache && folderCacheRef.current.has(cacheKey)) {
+      const cached = folderCacheRef.current.get(cacheKey);
+      setFolders(cached.folders || []);
+      setLectures(cached.lectures || []);
+      setBreadcrumbs(cached.breadcrumbs || []);
+      setStats(cached.stats || null);
+      setCurrentPath(path);
+      setIsLoading(false);
+
+      // Background silent revalidation without blocking UI
+      api.scanFolder(rootId, path).then((data) => {
+        if (!data || data.noRootConfigured) return;
+        const computed = computeAggregatedStats(data);
+        folderCacheRef.current.set(cacheKey, { ...data, stats: computed });
+        setFolders(data.folders || []);
+        setLectures(data.lectures || []);
+        setBreadcrumbs(data.breadcrumbs || []);
+        setStats(computed);
+      }).catch(() => {});
+
+      return cached;
+    }
+
     setIsLoading(true);
     setErrorMsg('');
     try {
@@ -70,29 +119,11 @@ export default function App() {
         return null;
       }
 
+      const computedStats = computeAggregatedStats(data);
+      folderCacheRef.current.set(cacheKey, { ...data, stats: computedStats });
       setFolders(data.folders || []);
       setLectures(data.lectures || []);
       setBreadcrumbs(data.breadcrumbs || []);
-      
-      // Ensure stats aggregate subfolders if at root or direct lectures are 0
-      let computedStats = data.stats;
-      if (computedStats && computedStats.totalLectures === 0 && data.folders && data.folders.length > 0) {
-        const totalVids = data.folders.reduce((acc, f) => acc + (f.videoCount || 0), 0);
-        const totalDur = data.folders.reduce((acc, f) => acc + (f.totalDuration || 0), 0);
-        const compCount = data.folders.reduce((acc, f) => acc + (f.completedCount || 0), 0);
-        const remDur = data.folders.reduce((acc, f) => acc + (f.remainingDuration || 0), 0);
-        const compDur = Math.max(0, totalDur - remDur);
-        const pct = totalVids > 0 ? Math.round((compCount / totalVids) * 100) : 0;
-        computedStats = {
-          ...computedStats,
-          totalLectures: totalVids,
-          totalDuration: totalDur,
-          completedLectures: compCount,
-          completedDuration: compDur,
-          remainingDuration: remDur,
-          completionPercentage: pct
-        };
-      }
       setStats(computedStats || null);
       setCurrentPath(path);
       return data;
@@ -169,6 +200,10 @@ export default function App() {
   // Listen to browser URL hash changes (back/forward buttons)
   useEffect(() => {
     const handleHashChange = () => {
+      if (isSwitchingRootRef.current) {
+        // Skip duplicate route application while optimistic root switch is handling it
+        return;
+      }
       const root = activeRootRef.current;
       if (root) {
         const route = parseHashRoute();
@@ -235,6 +270,7 @@ export default function App() {
       });
 
       showToast(newStatus ? 'Lecture marked as completed' : 'Lecture marked as uncompleted');
+      folderCacheRef.current.clear();
     } catch (err) {
       showToast('Failed to update completion state', true);
     }
@@ -253,26 +289,56 @@ export default function App() {
     window.location.hash = currentPath ? `#/folder/${encodeURIComponent(currentPath)}` : '#/';
   };
 
-  // Switch active media root directly from chips
+  // Switch active media root directly from chips with instant optimistic UI update
   const handleSelectRoot = useCallback(async (rootId) => {
-    try {
+    const targetRoot = roots.find((r) => r.id === rootId);
+    if (!targetRoot) return;
+
+    // 1. Instant Optimistic UI Update (0ms visual latency)
+    setActiveRoot(targetRoot);
+    activeRootRef.current = targetRoot;
+    setActiveLecture(null);
+    setCurrentPath('');
+    setBreadcrumbs([{ name: targetRoot.label || 'Home', path: '' }]);
+
+    // Instant switch to cached view if available
+    const cacheKey = `${targetRoot.id}::`;
+    if (folderCacheRef.current.has(cacheKey)) {
+      const cached = folderCacheRef.current.get(cacheKey);
+      setFolders(cached.folders || []);
+      setLectures(cached.lectures || []);
+      setStats(cached.stats || null);
+      setIsLoading(false);
+    } else {
+      setFolders([]);
+      setLectures([]);
+      setStats(null);
       setIsLoading(true);
-      await api.selectRoot(rootId);
-      const rootsData = await api.getRoots();
-      setRoots(rootsData.roots || []);
-      const root = rootsData.activeRoot || null;
-      setActiveRoot(root);
-      if (root) {
-        window.location.hash = '#/';
-        await loadFolderContents(root.id, '');
-        showToast(`Switched library: ${root.label}`);
+    }
+
+    isSwitchingRootRef.current = true;
+    if (window.location.hash !== '#/' && window.location.hash !== '') {
+      window.location.hash = '#/';
+    }
+
+    try {
+      // 2. Parallel server root switch and folder load
+      const [selectRes, scanData] = await Promise.all([
+        api.selectRoot(rootId).catch(() => null),
+        loadFolderContents(targetRoot.id, '', true)
+      ]);
+
+      if (selectRes && selectRes.roots) {
+        setRoots(selectRes.roots);
       }
+      showToast(`Switched library: ${targetRoot.label}`);
     } catch (err) {
       showToast(err.message || 'Failed to switch folder', true);
     } finally {
       setIsLoading(false);
+      isSwitchingRootRef.current = false;
     }
-  }, [loadFolderContents, showToast]);
+  }, [roots, loadFolderContents, showToast]);
 
   // Root changed from setup or settings
   const handleRootConfigured = async (newRoot) => {

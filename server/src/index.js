@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 
 import { getLanAddresses, checkCandidatePorts, getTailscaleIp } from './network.js';
 import { configManager } from './configManager.js';
-import { scanFolder, resolveSecurePath, generateLectureKey } from './scanner.js';
+import { scanFolder, resolveSecurePath, generateLectureKey, invalidateScanCache } from './scanner.js';
 import { streamVideoFile, serveSubtitleFile, streamRemuxFile, serveEmbeddedSubtitle, serveAudioTrack, prewarmAudioTrack } from './streamer.js';
 import { metadataService } from './metadata.js';
 
@@ -142,6 +142,7 @@ app.post('/api/roots', (req, res) => {
 
   try {
     const root = configManager.addRoot(folderPath, label);
+    invalidateScanCache();
     res.json({ success: true, root });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -152,7 +153,7 @@ app.post('/api/roots/select', (req, res) => {
   const { rootId } = req.body;
   try {
     const root = configManager.setActiveRoot(rootId);
-    res.json({ success: true, root });
+    res.json({ success: true, root, activeRoot: root, roots: configManager.getRoots() });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -160,6 +161,7 @@ app.post('/api/roots/select', (req, res) => {
 
 app.delete('/api/roots/:rootId', (req, res) => {
   configManager.removeRoot(req.params.rootId);
+  invalidateScanCache();
   res.json({ success: true });
 });
 

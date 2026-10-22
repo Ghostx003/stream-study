@@ -147,10 +147,96 @@ export function getFolderSummaryQuick(dirPath, rootId, relativeBase) {
   return { totalVideos, totalSubfolders, totalDuration, completedCount };
 }
 
+// In-memory folder scan cache for instantaneous library/folder switching
+const scanResultCache = new Map();
+const SCAN_CACHE_TTL_MS = 25000; // 25 seconds TTL
+
+export function invalidateScanCache(rootId) {
+  if (rootId) {
+    for (const key of scanResultCache.keys()) {
+      if (key.startsWith(`${rootId}::`)) {
+        scanResultCache.delete(key);
+      }
+    }
+  } else {
+    scanResultCache.clear();
+  }
+}
+
+function rehydrateScanResult(data, rootId) {
+  let currentFolderTotalDuration = 0;
+  let currentFolderCompletedDuration = 0;
+  let currentFolderCompletedCount = 0;
+
+  const rehydratedLectures = (data.lectures || []).map((lec) => {
+    const progress = configManager.getLectureProgress(lec.id);
+    const completed = !!progress.completed;
+    const currentTime = progress.currentTime || 0;
+    const lectureDuration = lec.duration || progress.duration || 0;
+    const remainingTime = completed ? 0 : Math.max(0, lectureDuration - currentTime);
+
+    currentFolderTotalDuration += lectureDuration;
+    if (completed) {
+      currentFolderCompletedCount++;
+      currentFolderCompletedDuration += lectureDuration;
+    }
+
+    return {
+      ...lec,
+      currentTime,
+      remainingTime,
+      completed,
+      bookmarks: progress.bookmarks || [],
+      lastWatched: progress.lastWatched || null
+    };
+  });
+
+  let aggregateTotalVideos = rehydratedLectures.length;
+  let aggregateTotalDuration = currentFolderTotalDuration;
+  let aggregateCompletedCount = currentFolderCompletedCount;
+  let aggregateCompletedDuration = currentFolderCompletedDuration;
+
+  for (const f of (data.folders || [])) {
+    aggregateTotalVideos += (f.videoCount || 0);
+    aggregateTotalDuration += (f.totalDuration || 0);
+    aggregateCompletedCount += (f.completedCount || 0);
+    aggregateCompletedDuration += Math.max(0, (f.totalDuration || 0) - (f.remainingDuration || 0));
+  }
+
+  const aggregateRemainingDuration = Math.max(0, aggregateTotalDuration - aggregateCompletedDuration);
+  const aggregateCompletionPercentage = aggregateTotalVideos > 0
+    ? Math.round((aggregateCompletedCount / aggregateTotalVideos) * 100)
+    : 0;
+
+  return {
+    ...data,
+    lectures: rehydratedLectures,
+    stats: {
+      ...data.stats,
+      totalDuration: aggregateTotalDuration,
+      completedDuration: aggregateCompletedDuration,
+      remainingDuration: aggregateRemainingDuration,
+      totalLectures: aggregateTotalVideos,
+      completedLectures: aggregateCompletedCount,
+      completionPercentage: aggregateCompletionPercentage,
+      directLecturesCount: rehydratedLectures.length
+    }
+  };
+}
+
 /**
  * Scans a specific folder level and returns folders and lectures with dynamic stats.
  */
 export async function scanFolder(root, relativeSubPath = '') {
+  const cacheKey = `${root.id}::${relativeSubPath}`;
+  const now = Date.now();
+  if (scanResultCache.has(cacheKey)) {
+    const cached = scanResultCache.get(cacheKey);
+    if (now - cached.timestamp < SCAN_CACHE_TTL_MS) {
+      return rehydrateScanResult(cached.data, root.id);
+    }
+  }
+
   const rootPath = root.path;
   const targetDir = resolveSecurePath(rootPath, relativeSubPath);
 
@@ -334,7 +420,7 @@ export async function scanFolder(root, relativeSubPath = '') {
     ? Math.round((aggregateCompletedCount / aggregateTotalVideos) * 100)
     : 0;
 
-  return {
+  const result = {
     rootId: root.id,
     rootLabel: root.label,
     currentPath: relativeSubPath,
@@ -352,4 +438,7 @@ export async function scanFolder(root, relativeSubPath = '') {
     folders,
     lectures
   };
+
+  scanResultCache.set(cacheKey, { timestamp: Date.now(), data: result });
+  return result;
 }
